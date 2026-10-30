@@ -88,3 +88,81 @@ gate_decide() {
     --argjson pr_number "$pr_number" \
     '{run: $run, reason: $reason, mode: $mode, model: $model, pr_number: $pr_number}'
 }
+
+# --- diff helpers --------------------------------------------------------------------
+# A unified diff is a sequence of sections, each starting with "diff --git a/X b/Y".
+# The path of a section is its b/ side.
+
+# _diff_sections DIFF_FILE: one line per section: "INDEX<TAB>PATH<TAB>VAULT" where VAULT is
+# 1 when the section adds a line starting with "$ANSIBLE_VAULT;".
+_diff_sections() {
+  awk '
+    /^diff --git / { if (n) print n "\t" path "\t" vault; n++; path = $0; sub(/^diff --git a\/.* b\//, "", path); vault = 0; next }
+    /^\+\$ANSIBLE_VAULT;/ { vault = 1 }
+    END { if (n) print n "\t" path "\t" vault }
+  ' "$1"
+}
+
+# _is_lockfile PATH: dependency lockfiles are never worth a review.
+_is_lockfile() {
+  case ${1##*/} in
+    *.lock | package-lock.json | go.sum) return 0 ;;
+  esac
+  return 1
+}
+
+# _glob_matches PATH GLOBS_CSV: exit 0 when PATH matches one of the comma-separated globs.
+_glob_matches() {
+  local IFS=, glob
+  for glob in $2; do
+    # shellcheck disable=SC2053
+    [[ -n $glob && $1 == $glob ]] && return 0
+  done
+  return 1
+}
+
+# filter_diff DIFF_FILE EXCLUDE_GLOBS_CSV: print the diff without excluded paths,
+# lockfiles and vault files. Deleted, renamed and binary sections pass through. Exit 0.
+filter_diff() {
+  local file=$1 globs=$2 drop=" " idx path vault
+  while IFS=$'\t' read -r idx path vault; do
+    if [[ $vault == 1 ]] || _is_lockfile "$path" || _glob_matches "$path" "$globs"; then
+      drop+="$idx "
+    fi
+  done < <(_diff_sections "$file")
+  awk -v drop="$drop" '
+    /^diff --git / { n++; keep = index(drop, " " n " ") == 0 }
+    keep { print }
+  ' "$file"
+}
+
+# diff_too_large DIFF_FILE MAX_LINES: exit 0 when the diff has more than MAX_LINES lines.
+diff_too_large() {
+  [[ $(wc -l < "$1") -gt $2 ]]
+}
+
+# diff_file_list DIFF_FILE: one "PATH (+ADDED/-REMOVED)" line per section.
+diff_file_list() {
+  awk '
+    function flush() { if (path != "") print path " (+" add "/-" del ")" }
+    /^diff --git / { flush(); path = $0; sub(/^diff --git a\/.* b\//, "", path); add = 0; del = 0; next }
+    /^\+\+\+ / || /^--- / { next }
+    /^\+/ { add++ }
+    /^-/ { del++ }
+    END { flush() }
+  ' "$1"
+}
+
+# diff_new_side_lines DIFF_FILE: "PATH<TAB>LINE" for every new-side line (context or added)
+# covered by a hunk, computed from the "@@ -a,b +c,d @@" headers.
+diff_new_side_lines() {
+  awk '
+    /^diff --git / { path = $0; sub(/^diff --git a\/.* b\//, "", path); inhunk = 0; next }
+    /^@@ / { match($0, /\+[0-9]+/); line = substr($0, RSTART + 1, RLENGTH - 1) + 0; inhunk = 1; next }
+    !inhunk { next }
+    /^\+\+\+ / || /^--- / { next }
+    /^\\/ { next }
+    /^-/ { next }
+    { print path "\t" line; line++ }
+  ' "$1"
+}

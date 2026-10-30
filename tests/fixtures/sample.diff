@@ -1,0 +1,46 @@
+diff --git a/tasks/main.yml b/tasks/main.yml
+index 1111111..2222222 100644
+--- a/tasks/main.yml
++++ b/tasks/main.yml
+@@ -12,6 +12,7 @@
+ - name: Install blocky
+   ansible.builtin.unarchive:
+     src: "{{ blocky_download_url }}"
++    remote_src: true
+     dest: /usr/local/bin
+     owner: root
+     group: root
+diff --git a/vars/secrets.yml b/vars/secrets.yml
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/vars/secrets.yml
+@@ -0,0 +1,3 @@
++$ANSIBLE_VAULT;1.1;AES256
++66386439653236336462626566653063336164663966303231363934653561363964363833313662
++6431626536303530376336343832656537303632313433360a626438346336353331386135323734
+diff --git a/poetry.lock b/poetry.lock
+index 4444444..5555555 100644
+--- a/poetry.lock
++++ b/poetry.lock
+@@ -1,4 +1,4 @@
+ [[package]]
+ name = "ansible-core"
+-version = "2.21.4"
++version = "2.21.5"
+ description = "Radically simple IT automation"
+diff --git a/old.txt b/old.txt
+deleted file mode 100644
+index 6666666..0000000
+--- a/old.txt
++++ /dev/null
+@@ -1,2 +0,0 @@
+-obsolete
+-notes
+diff --git a/a.yml b/b.yml
+similarity index 100%
+rename from a.yml
+rename to b.yml
+diff --git a/logo.png b/logo.png
+index 7777777..8888888 100644
+Binary files a/logo.png and b/logo.png differ
