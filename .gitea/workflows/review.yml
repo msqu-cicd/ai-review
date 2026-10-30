@@ -1,0 +1,129 @@
+name: AI Review (reusable)
+
+# Reusable workflow: one Claude Code review per pull request or whole-repository audit,
+# posted to Gitea. Called from each repository's .gitea/workflows/ai-review.yml, see
+# examples/caller-ai-review.yml and the README.
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: 'pr, comment or audit; empty derives the mode from the event'
+        type: string
+        default: ''
+      model:
+        description: 'opus or sonnet; empty means opus (or the model named in a /review comment)'
+        type: string
+        default: ''
+      skip_authors:
+        description: 'comma-separated PR authors whose PRs are not reviewed'
+        type: string
+        default: 'renovate,gitea-actions'
+      exclude_paths:
+        description: 'comma-separated globs removed from the checkout and the diff before the review'
+        type: string
+        default: ''
+      max_diff_lines:
+        description: 'above this many diff lines the model gets the file list instead of the diff'
+        type: string
+        default: '4000'
+      ai_review_ref:
+        description: 'ref of CICD/ai-review to take scripts and prompts from'
+        type: string
+        default: main
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      CLAUDE_CODE_VERSION: 2.1.308 # renovate: datasource=custom.claude-code depName=claude-code
+      GITEA_TOKEN: ${{ secrets.GITEA_TOKEN || github.token }}
+      GITHUB_API_URL: ${{ github.api_url }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Check out CICD/ai-review
+        uses: actions/checkout@v4
+        with:
+          repository: CICD/ai-review
+          ref: ${{ inputs.ai_review_ref }}
+          path: ai-review
+
+      - name: Decide whether to run
+        id: gate
+        env:
+          EVENT_JSON: ${{ toJSON(github.event) }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          printf '%s' "$EVENT_JSON" > "${RUNNER_TEMP:-/tmp}/event.json"
+          ai-review/scripts/gate.sh "${{ github.event_name }}" "${RUNNER_TEMP:-/tmp}/event.json" \
+            "${{ inputs.skip_authors }}" "${{ github.repository }}" "${{ inputs.mode }}" "${{ inputs.model }}"
+
+      - name: Check out the repository
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          path: repo
+          ref: ${{ steps.gate.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Install Claude Code
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s "$CLAUDE_CODE_VERSION"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Secret gate
+        if: steps.gate.outputs.run == 'true'
+        run: ai-review/scripts/secret-scan.sh tree repo "${{ inputs.exclude_paths }}" out
+
+      - name: Review
+        if: steps.gate.outputs.run == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          BASE_SHA: ${{ steps.gate.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
+          BASE_REF: ${{ steps.gate.outputs.base_ref }}
+          EXCLUDE_PATHS: ${{ inputs.exclude_paths }}
+          MAX_DIFF_LINES: ${{ inputs.max_diff_lines }}
+          AI_REVIEW_DIR: ${{ github.workspace }}/ai-review
+        run: |
+          claude --version
+          ai-review/scripts/review.sh "${{ steps.gate.outputs.mode }}" "${{ steps.gate.outputs.model }}" repo out
+
+      - name: Post the result
+        if: steps.gate.outputs.run == 'true'
+        env:
+          MODE: ${{ steps.gate.outputs.mode }}
+          MODEL: ${{ steps.gate.outputs.model }}
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
+        run: |
+          source ai-review/scripts/lib.sh
+          if [[ "$MODE" == audit ]]; then
+            label=$(ai-review/scripts/post.sh label-id ai-audit 5319e7)
+            build_issue_payload out/review.json "$(date -u +%F)" "$MODEL" "$label" > out/issue.json
+            ai-review/scripts/post.sh issue out/issue.json
+          else
+            build_pr_review_payload out/review.json "$HEAD_SHA" out/pr.diff "$MODEL" > out/review_payload.json
+            ai-review/scripts/post.sh review "$PR_NUMBER" out/review_payload.json
+          fi
+
+      - name: Report the failure on the pull request
+        if: failure() && steps.gate.outputs.run == 'true' && steps.gate.outputs.pr_number != ''
+        env:
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+        run: |
+          mkdir -p out
+          if [[ -s out/skip-reason.txt ]]; then
+            cp out/skip-reason.txt out/failure.md
+          else
+            echo "AI review failed, see run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" > out/failure.md
+          fi
+          ai-review/scripts/post.sh comment "$PR_NUMBER" out/failure.md
