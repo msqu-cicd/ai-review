@@ -1,0 +1,5 @@
+{
+  "title": "AI audit 2026-11-01 (opus)",
+  "labels": [7],
+  "body": "Adds remote_src to the unarchive task.\n\n### major\n- tasks/main.yml:12 remote_src: true extracts a file that is never checksum-verified."
+}

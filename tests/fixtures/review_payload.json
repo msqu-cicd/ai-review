@@ -1,0 +1,8 @@
+{
+  "event": "COMMENT",
+  "commit_id": "2222222222222222222222222222222222222222",
+  "body": "## AI review (opus)\n\n**Changes requested**\n\nAdds remote_src to the unarchive task.\n\n### Not placed in the diff\n- **nit** README.md The new variable is not documented.",
+  "comments": [
+    {"path": "tasks/main.yml", "new_position": 12, "body": "**major** remote_src: true extracts a file that is never checksum-verified."}
+  ]
+}
