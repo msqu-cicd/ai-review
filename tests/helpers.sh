@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Assertion helpers for the shell tests. Sourced by tests/run.sh before each test file.
 # Every assert returns 1 on failure and prints the mismatch to stderr; tests run under
 # `set -e`, so a failing assert ends the test function.

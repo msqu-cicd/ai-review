@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Smoke tests for the test harness itself (tests/run.sh + tests/helpers.sh).
 
 test_assert_eq_passes() {

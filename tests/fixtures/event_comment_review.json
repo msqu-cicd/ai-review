@@ -1,0 +1,7 @@
+{
+  "action": "created",
+  "is_pull": true,
+  "issue": {"number": 6, "title": "Spike: AI review", "pull_request": {"draft": false, "html_url": "https://git.msqu.de/Ansible/blocky/pulls/6", "merged": false, "merged_at": null}, "user": {"login": "micha"}},
+  "comment": {"id": 999, "body": "/review", "user": {"login": "micha"}},
+  "repository": {"full_name": "Ansible/blocky"}
+}

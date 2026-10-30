@@ -1,0 +1,6 @@
+{
+  "inputs": {"mode": "audit", "model": "opus"},
+  "ref": "refs/heads/main",
+  "repository": {"full_name": "Ansible/blocky"},
+  "sender": {"login": "micha"}
+}

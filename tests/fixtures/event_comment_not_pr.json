@@ -1,0 +1,7 @@
+{
+  "action": "created",
+  "is_pull": false,
+  "issue": {"number": 6, "title": "Spike: AI review", "pull_request": null, "user": {"login": "micha"}},
+  "comment": {"id": 999, "body": "/review", "user": {"login": "micha"}},
+  "repository": {"full_name": "Ansible/blocky"}
+}

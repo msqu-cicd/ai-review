@@ -1,0 +1,13 @@
+{
+  "action": "opened",
+  "number": 6,
+  "pull_request": {
+    "number": 6,
+    "title": "Spike: AI review",
+    "draft": false,
+    "user": {"login": "renovate"},
+    "base": {"ref": "main", "sha": "1111111111111111111111111111111111111111", "repo": {"full_name": "Ansible/blocky"}},
+    "head": {"ref": "ai-review-spike", "sha": "2222222222222222222222222222222222222222", "repo": {"full_name": "Ansible/blocky"}}
+  },
+  "repository": {"full_name": "Ansible/blocky"}
+}
