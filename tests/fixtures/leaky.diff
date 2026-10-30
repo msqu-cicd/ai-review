@@ -1,0 +1,9 @@
+diff --git a/group_vars/all/tokens.yml b/group_vars/all/tokens.yml
+new file mode 100644
+index 0000000..9999999
+--- /dev/null
++++ b/group_vars/all/tokens.yml
+@@ -0,0 +1,3 @@
++---
++aws_access_key_id: AKIAQ7X2J3K4L5M6N7P8
++github_token: ghp_Q7x2J3k4L5m6N7p8R9s0T1u2V3w4X5y6Z7a8

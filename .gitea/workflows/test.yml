@@ -7,6 +7,8 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    env:
+      GITLEAKS_TEST: "1"
     steps:
       - uses: actions/checkout@v4
       - run: tests/run.sh
