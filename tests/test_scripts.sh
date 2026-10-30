@@ -65,6 +65,19 @@ test_review_writes_review_json() {
   assert_eq request_changes "$(jq -r .verdict "$d/review.json")"
 }
 
+test_review_accepts_relative_out_dir() { # the workflow passes "repo" and "out" relative to the workspace
+  local r w
+  r=$(two_commit_repo)
+  w=$(mktemp -d)
+  (
+    cd "$w" || exit 1
+    CLAUDE_BIN="$REPO_ROOT/tests/fake_claude.sh" FAKE_CLAUDE_OUTPUT="$(fixture claude_ok.json)" \
+      BASE_SHA=HEAD~1 HEAD_SHA=HEAD AI_REVIEW_DIR="$REPO_ROOT" \
+      "$REPO_ROOT/scripts/review.sh" pr opus "$r" out > /dev/null
+  )
+  [[ -s "$w/out/review.json" ]]
+}
+
 test_review_uses_ansible_prompt() {
   local d r
   d=$(mktemp -d)

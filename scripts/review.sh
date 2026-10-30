@@ -20,13 +20,17 @@ mode=$1 model=$2 repo_dir=$3 out=$4
 case $mode in pr | comment | audit) ;; *) usage ;; esac
 case $model in opus | sonnet) ;; *) echo "review.sh: unsupported model $model" >&2; exit 2 ;; esac
 [[ -d $repo_dir ]] || { echo "review.sh: $repo_dir is not a directory" >&2; exit 2; }
+# claude runs inside REPO_DIR, so every other path must be absolute.
+mkdir -p "$out"
+out=$(cd "$out" && pwd)
+repo_dir=$(cd "$repo_dir" && pwd)
 
 AI_REVIEW_DIR=${AI_REVIEW_DIR:-$(dirname "$here")}
+AI_REVIEW_DIR=$(cd "$AI_REVIEW_DIR" && pwd)
 CLAUDE_BIN=${CLAUDE_BIN:-claude}
 MAX_DIFF_LINES=${MAX_DIFF_LINES:-4000}
 EXCLUDE_PATHS=${EXCLUDE_PATHS:-}
 repo_name=${GITHUB_REPOSITORY:-$(basename "$repo_dir")}
-mkdir -p "$out"
 
 # System prompt: mode prompt plus the Ansible convention list when the checkout is Ansible.
 if [[ $mode == audit ]]; then
