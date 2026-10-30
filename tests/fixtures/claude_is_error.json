@@ -1,0 +1,27 @@
+{
+  "type": "result",
+  "subtype": "error_during_execution",
+  "is_error": true,
+  "duration_ms": 9198,
+  "duration_api_ms": 8800,
+  "num_turns": 3,
+  "result": "Login expired",
+  "session_id": "00000000-0000-0000-0000-000000000001",
+  "total_cost_usd": 0.12,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 4325,
+    "cache_read_input_tokens": 3232,
+    "output_tokens": 929,
+    "service_tier": "standard"
+  },
+  "modelUsage": {
+    "claude-opus-5-5": {
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 4325,
+      "cache_read_input_tokens": 3232,
+      "output_tokens": 929,
+      "service_tier": "standard"
+    }
+  }
+}

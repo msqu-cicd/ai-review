@@ -1,0 +1,22 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 9198,
+  "duration_api_ms": 8800,
+  "num_turns": 3,
+  "result": "{\"summary\": \"...\"}",
+  "session_id": "00000000-0000-0000-0000-000000000001",
+  "total_cost_usd": 0.12,
+  "usage": {"input_tokens": 2, "cache_creation_input_tokens": 4325, "cache_read_input_tokens": 3232, "output_tokens": 929, "service_tier": "standard"},
+  "modelUsage": {"claude-opus-5-5": {"input_tokens": 2, "cache_creation_input_tokens": 4325, "cache_read_input_tokens": 3232, "output_tokens": 929, "service_tier": "standard"}},
+  "structured_output": {
+    "summary": "Adds remote_src to the unarchive task so the download is extracted on the target. One task still runs as root with a world-readable mode.",
+    "verdict": "request_changes",
+    "findings": [
+      {"path": "tasks/main.yml", "line": 12, "severity": "major", "body": "remote_src: true extracts a file that is never checksum-verified; add checksum: to the download task."},
+      {"path": "tasks/main.yml", "line": 99, "severity": "minor", "body": "The config template task lacks owner/group/mode."},
+      {"path": "README.md", "line": null, "severity": "nit", "body": "The new variable is not documented."}
+    ]
+  }
+}

@@ -166,3 +166,85 @@ diff_new_side_lines() {
     { print path "\t" line; line++ }
   ' "$1"
 }
+
+# --- Claude output and Gitea payloads ------------------------------------------------
+
+# validate_claude_output CLAUDE_JSON_FILE: print .structured_output when the run succeeded
+# and the output has the review shape (summary, verdict, findings[] with path, line,
+# severity, body). Exit 1 with the reason on stderr otherwise.
+validate_claude_output() {
+  local file=$1
+  if [[ $(jq -r '.is_error // false' "$file") == true ]]; then
+    echo "validate_claude_output: Claude Code reported is_error=true: $(jq -r '.result // ""' "$file" | head -c 300)" >&2
+    return 1
+  fi
+  if ! jq -e '
+      .structured_output
+      | type == "object"
+        and (.summary | type == "string")
+        and (.verdict | IN("comment", "request_changes"))
+        and (.findings | type == "array")
+        and all(.findings[];
+              (.path | type == "string")
+              and ((.line | type) == "number" or (.line | type) == "null")
+              and (.severity | IN("blocker", "major", "minor", "nit"))
+              and (.body | type == "string"))
+    ' "$file" > /dev/null 2>&1; then
+    echo "validate_claude_output: structured_output is missing or malformed" >&2
+    return 1
+  fi
+  jq '.structured_output' "$file"
+}
+
+# build_comment_payload TEXT: Gitea issue comment body.
+build_comment_payload() {
+  jq -n --arg body "$1" '{body: $body}'
+}
+
+# _finding_ref: jq helper text, "path" or "path:line".
+_jq_finding_ref='(.path + (if .line != null then ":" + (.line | tostring) else "" end))'
+
+# build_pr_review_payload REVIEW_JSON_FILE HEAD_SHA DIFF_FILE MODEL: Gitea
+# CreatePullReviewOptions with event COMMENT; findings on new-side diff lines become
+# inline comments, the rest are listed in the body.
+build_pr_review_payload() {
+  local review=$1 sha=$2 diff=$3 model=$4 placeable
+  placeable=$(diff_new_side_lines "$diff" | jq -R -s 'split("\n") | map(select(length > 0) | sub("\t"; ":"))')
+  jq --arg sha "$sha" --arg model "$model" --argjson placeable "$placeable" '
+    . as $r
+    | ($r.findings | map(. + {key: (.path + ":" + ((.line // "") | tostring))})) as $all
+    | ($all | map(select(.line != null and (.key | IN($placeable[]))))) as $placed
+    | ($all | map(select(.line == null or ((.key | IN($placeable[])) | not)))) as $rest
+    | {
+        event: "COMMENT",
+        commit_id: $sha,
+        body: ("## AI review (" + $model + ")\n\n"
+               + (if $r.verdict == "request_changes" then "**Changes requested**\n\n" else "" end)
+               + $r.summary
+               + (if ($rest | length) > 0
+                  then "\n\n### Not placed in the diff\n"
+                       + ($rest | map("- **" + .severity + "** " + '"$_jq_finding_ref"' + " " + .body) | join("\n"))
+                  else "" end)),
+        comments: ($placed | map({path: .path, new_position: .line, body: ("**" + .severity + "** " + .body)}))
+      }
+  ' "$review"
+}
+
+# build_issue_payload REVIEW_JSON_FILE DATE MODEL LABEL_ID: Gitea CreateIssueOption for
+# an audit: findings grouped by severity, most severe first.
+build_issue_payload() {
+  local review=$1 date=$2 model=$3 label=$4
+  jq --arg date "$date" --arg model "$model" --argjson label "$label" '
+    . as $r
+    | {
+        title: ("AI audit " + $date + " (" + $model + ")"),
+        labels: [$label],
+        body: ($r.summary + "\n"
+               + ([ ("blocker", "major", "minor", "nit") as $s
+                    | ($r.findings | map(select(.severity == $s)))
+                    | select(length > 0)
+                    | "\n### " + $s + "\n" + (map("- " + '"$_jq_finding_ref"' + " " + .body) | join("\n"))
+                  ] | join("\n")))
+      }
+  ' "$review"
+}
