@@ -1,0 +1,43 @@
+{
+  "title": "AI review result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "verdict", "findings"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "At most two sentences: what the change does and whether it looks safe to merge."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["comment", "request_changes"],
+      "description": "request_changes only when a blocker or major finding exists."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "line", "severity", "body"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Repository-relative path of the file the finding is about."
+          },
+          "line": {
+            "type": ["integer", "null"],
+            "description": "Line number in the new version of the file, or null when the finding is about the file as a whole."
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["blocker", "major", "minor", "nit"]
+          },
+          "body": {
+            "type": "string",
+            "description": "The problem and the concrete fix, one or two sentences."
+          }
+        }
+      }
+    }
+  }
+}
