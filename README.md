@@ -77,3 +77,6 @@ tea api --login git -X PUT orgs/<org>/actions/secrets/CLAUDE_CODE_OAUTH_TOKEN -d
 
 and delete the file. Never paste the token into a terminal that is being logged or into a chat.
 Renewal is due one year after minting; put the date in the calendar when you set the secret.
+
+Current token: minted 2026-10-30, set on the orgs `Ansible`, `Infrastructure` and `DevOps` the same
+day, expires 2027-10-30. Repo-level copies are not used.
