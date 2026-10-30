@@ -233,12 +233,13 @@ build_pr_review_payload() {
 # build_issue_payload REVIEW_JSON_FILE DATE MODEL LABEL_ID: Gitea CreateIssueOption for
 # an audit: findings grouped by severity, most severe first.
 build_issue_payload() {
-  local review=$1 date=$2 model=$3 label=$4
-  jq --arg date "$date" --arg model "$model" --argjson label "$label" '
+  local review=$1 date=$2 model=$3 label_id=$4
+  # jq 1.6 rejects $label (keyword), hence $label_id.
+  jq --arg date "$date" --arg model "$model" --argjson label_id "$label_id" '
     . as $r
     | {
         title: ("AI audit " + $date + " (" + $model + ")"),
-        labels: [$label],
+        labels: [$label_id],
         body: ($r.summary + "\n"
                + ([ ("blocker", "major", "minor", "nit") as $s
                     | ($r.findings | map(select(.severity == $s)))

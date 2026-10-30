@@ -29,8 +29,13 @@ concurrency:
 
 jobs:
   review:
-    # Comments that are not a /review command never start a runner job.
-    if: github.event_name != 'issue_comment' || startsWith(github.event.comment.body, '/review')
+    # Comments that are not a /review command on a pull request never start a runner job.
+    # The shared workflow also checks that the commenter has write access.
+    if: github.event_name != 'issue_comment' || (github.event.issue.pull_request && startsWith(github.event.comment.body, '/review'))
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     uses: CICD/ai-review/.gitea/workflows/review.yml@main
     with:
       mode: ${{ inputs.mode || '' }}

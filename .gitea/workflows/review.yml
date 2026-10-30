@@ -54,6 +54,7 @@ jobs:
           repository: CICD/ai-review
           ref: ${{ inputs.ai_review_ref }}
           path: ai-review
+          persist-credentials: false
 
       - name: Decide whether to run
         id: gate
@@ -72,6 +73,8 @@ jobs:
           path: repo
           ref: ${{ steps.gate.outputs.head_sha }}
           fetch-depth: 0
+          # The model reads this tree; the job token must not sit in its .git/config.
+          persist-credentials: false
 
       - name: Install Claude Code
         if: steps.gate.outputs.run == 'true'

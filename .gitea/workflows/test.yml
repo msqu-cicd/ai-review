@@ -11,4 +11,5 @@ jobs:
       GITLEAKS_TEST: "1"
     steps:
       - uses: actions/checkout@v4
+      - run: jq --version
       - run: tests/run.sh

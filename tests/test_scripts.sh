@@ -14,6 +14,19 @@ review_fake() { # CLAUDE_FIXTURE MODE REPO_DIR OUT_DIR [ARGS_FILE] -> runs revie
     scripts/review.sh "$mode" opus "$repo" "$out"
 }
 
+two_commit_repo() { # -> path of a temporary git repo with two commits (CI checkouts are shallow)
+  local r
+  r=$(mktemp -d)
+  git -C "$r" init -q
+  echo "a: 1" > "$r/vars.yml"
+  git -C "$r" add -A
+  git -C "$r" -c user.name=t -c user.email=t@t commit -qm first
+  echo "a: 2" > "$r/vars.yml"
+  git -C "$r" add -A
+  git -C "$r" -c user.name=t -c user.email=t@t commit -qm second
+  printf '%s' "$r"
+}
+
 # grep -q would close the pipe before post.sh finishes printing the payload, so capture first.
 test_post_review_dry_run_url() {
   local out
@@ -42,13 +55,13 @@ test_post_unknown_kind_fails() {
 test_review_fails_on_is_error() {
   local d
   d=$(mktemp -d)
-  assert_exit 1 review_fake claude_is_error.json pr "$REPO_ROOT" "$d"
+  assert_exit 1 review_fake claude_is_error.json pr "$(two_commit_repo)" "$d"
 }
 
 test_review_writes_review_json() {
   local d
   d=$(mktemp -d)
-  review_fake claude_ok.json pr "$REPO_ROOT" "$d" > /dev/null
+  review_fake claude_ok.json pr "$(two_commit_repo)" "$d" > /dev/null
   assert_eq request_changes "$(jq -r .verdict "$d/review.json")"
 }
 
@@ -69,7 +82,7 @@ test_review_passes_restricted_flags() {
   local d args
   d=$(mktemp -d)
   args=$(mktemp)
-  review_fake claude_ok.json pr "$REPO_ROOT" "$d" "$args" > /dev/null
+  review_fake claude_ok.json pr "$(two_commit_repo)" "$d" "$args" > /dev/null
   local joined
   joined=$(tr '\n' ' ' < "$args")
   [[ $joined == *"--restricted "* ]]

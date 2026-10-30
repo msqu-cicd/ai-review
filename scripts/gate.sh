@@ -51,9 +51,14 @@ if [[ $run == true ]]; then
       esac
       if [[ $run == true ]]; then
         prjson=$(gitea_get "pulls/$pr")
-        base_sha=$(jq -r '.base.sha // ""' <<<"$prjson")
-        head_sha=$(jq -r '.head.sha // ""' <<<"$prjson")
-        base_ref=$(jq -r '.base.ref // ""' <<<"$prjson")
+        head_repo=$(jq -r '.head.repo.full_name // ""' <<<"$prjson")
+        if [[ $head_repo != "$repo" ]]; then
+          deny "head repository $head_repo differs from $repo"
+        else
+          base_sha=$(jq -r '.base.sha // ""' <<<"$prjson")
+          head_sha=$(jq -r '.head.sha // ""' <<<"$prjson")
+          base_ref=$(jq -r '.base.ref // ""' <<<"$prjson")
+        fi
       fi
     fi
   else # workflow_dispatch
