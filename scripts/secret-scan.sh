@@ -12,7 +12,7 @@
 # Env: GITLEAKS_BIN overrides the binary (skips the download), GITLEAKS_VERSION the pin.
 set -euo pipefail
 
-GITLEAKS_VERSION=${GITLEAKS_VERSION:-8.30.1}
+GITLEAKS_VERSION=${GITLEAKS_VERSION:-8.30.1} # renovate: datasource=github-releases depName=gitleaks/gitleaks
 GITLEAKS_BASE_URL="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
 
 usage() { echo "usage: secret-scan.sh diff|tree TARGET EXCLUDE_GLOBS_CSV OUT_DIR" >&2; exit 2; }
