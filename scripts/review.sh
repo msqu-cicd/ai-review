@@ -56,6 +56,9 @@ else
   # the PR branched never show up as phantom reversals.
   git -C "$repo_dir" diff "$BASE_SHA...$HEAD_SHA" > "$out/raw.diff"
   filter_diff "$out/raw.diff" "$EXCLUDE_PATHS" > "$out/pr.diff"
+  # The workflow's gate scans only the PR head's tree; deleted files and removed lines reach the
+  # model through the diff, so scan exactly what would be sent. A hit writes skip-reason.txt.
+  "$here/secret-scan.sh" diff "$out/pr.diff" "" "$out" || exit 1
   task="Review the pull request diff given on stdin. Repository: $repo_name, base branch: ${BASE_REF:-unknown}."
   filter_diff_dropped "$out/raw.diff" "$EXCLUDE_PATHS" > "$out/hidden.tsv"
   decrypted=$(awk -F'\t' '$2 == "vault-removed" {print $1}' "$out/hidden.tsv" | paste -sd ',' - | sed 's/,/, /g')

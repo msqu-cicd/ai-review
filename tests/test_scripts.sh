@@ -11,6 +11,7 @@ review_fake() { # CLAUDE_FIXTURE MODE REPO_DIR OUT_DIR [ARGS_FILE] -> runs revie
   local fixture=$1 mode=$2 repo=$3 out=$4 args=${5:-}
   CLAUDE_BIN="$REPO_ROOT/tests/fake_claude.sh" FAKE_CLAUDE_OUTPUT="$(fixture "$fixture")" \
     FAKE_CLAUDE_ARGS_FILE="$args" BASE_SHA=HEAD~1 HEAD_SHA=HEAD AI_REVIEW_DIR="$REPO_ROOT" \
+    GITLEAKS_BIN="${GITLEAKS_BIN-/bin/true}" \
     scripts/review.sh "$mode" opus "$repo" "$out"
 }
 
@@ -79,9 +80,35 @@ test_review_diff_excludes_base_only_changes() { # merge-base diff: commits on ma
   git -C "$r" -c user.name=t -c user.email=t@t commit -qm "on main"
   CLAUDE_BIN="$REPO_ROOT/tests/fake_claude.sh" FAKE_CLAUDE_OUTPUT="$(fixture claude_ok.json)" \
     BASE_SHA=$(git -C "$r" rev-parse HEAD) HEAD_SHA=$(git -C "$r" rev-parse feature) AI_REVIEW_DIR="$REPO_ROOT" \
+    GITLEAKS_BIN=/bin/true \
     scripts/review.sh pr opus "$r" "$d" > /dev/null
   grep -q 'feature.yml' "$d/raw.diff"
   ! grep -q 'on_main.yml' "$d/raw.diff"
+}
+
+test_review_skips_when_the_diff_scan_hits() { # the model is never called
+  local r d
+  r=$(two_commit_repo)
+  d=$(mktemp -d)
+  GITLEAKS_BIN=/bin/false assert_exit 1 review_fake claude_ok.json pr "$r" "$d" "$d/args"
+  grep -q 'AI review skipped: secret-like content' "$d/skip-reason.txt"
+  [[ ! -e "$d/args" && ! -e "$d/review.json" ]]
+}
+
+test_review_skips_on_a_secret_in_a_deleted_file() { # the head tree is clean, only the diff shows it
+  [[ -n "${GITLEAKS_TEST:-}" ]] || return 0
+  local r d
+  r=$(mktemp -d)
+  d=$(mktemp -d)
+  git -C "$r" init -q
+  grep '^+[^+]' "$(fixture leaky.diff)" | cut -c2- > "$r/tokens.yml"
+  git -C "$r" add -A
+  git -C "$r" -c user.name=t -c user.email=t@t commit -qm first
+  git -C "$r" rm -q tokens.yml
+  git -C "$r" -c user.name=t -c user.email=t@t commit -qm second
+  GITLEAKS_BIN='' assert_exit 1 review_fake claude_ok.json pr "$r" "$d" "$d/args"
+  grep -q 'AI review skipped: secret-like content' "$d/skip-reason.txt"
+  [[ ! -e "$d/args" ]]
 }
 
 test_review_accepts_relative_out_dir() { # the workflow passes "repo" and "out" relative to the workspace
@@ -91,7 +118,7 @@ test_review_accepts_relative_out_dir() { # the workflow passes "repo" and "out" 
   (
     cd "$w" || exit 1
     CLAUDE_BIN="$REPO_ROOT/tests/fake_claude.sh" FAKE_CLAUDE_OUTPUT="$(fixture claude_ok.json)" \
-      BASE_SHA=HEAD~1 HEAD_SHA=HEAD AI_REVIEW_DIR="$REPO_ROOT" \
+      BASE_SHA=HEAD~1 HEAD_SHA=HEAD AI_REVIEW_DIR="$REPO_ROOT" GITLEAKS_BIN=/bin/true \
       "$REPO_ROOT/scripts/review.sh" pr opus "$r" out > /dev/null
   )
   [[ -s "$w/out/review.json" ]]
