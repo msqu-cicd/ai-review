@@ -78,6 +78,8 @@ The secret `CLAUDE_CODE_OAUTH_TOKEN` must be passed by the caller (an org secret
    labelled `ai-audit` for audits. The review body starts with **Changes requested** exactly when
    at least one finding is a blocker or major; the prompts keep problems that only affect an
    unsupported platform at nit. A failed run leaves one comment pointing at the run log.
+   Each of these posts ends with the run's cost estimate as a hidden line, see
+   [Cost estimate](#cost-estimate).
 
 ### Repository context
 
@@ -96,6 +98,46 @@ cannot change its own review instructions (a change to the file takes effect onc
 audits take it from the repository's default branch (`github.event.repository.default_branch`),
 whatever ref they run on, and skip it when that branch cannot be resolved or fetched. Only a
 regular file counts: a symlink, or a path below a symlinked directory, is ignored.
+
+## Cost estimate
+
+The reviews run on the owner's Claude Max subscription. To measure what the same runs would cost
+on an API key, `review.sh` reads Claude Code's result object (`--output-format json`) after every
+run that reached the model, failed runs included, and writes `out/cost.json`:
+
+```json
+{"mode":"pr","model":"opus","repo":"Ansible/blocky","number":7,"timestamp":"2026-10-31T12:00:00Z","total_cost_usd":0.12,"duration_ms":9198,"num_turns":3,"input_tokens":2,"output_tokens":929,"cache_read_input_tokens":3232,"cache_creation_input_tokens":4325,"models":{"claude-opus-5-5":{"cost_usd":0.12,"input_tokens":2,"output_tokens":929,"cache_read_input_tokens":3232,"cache_creation_input_tokens":4325}}}
+```
+
+The job log gets one line, `review.sh: cost estimate $0.12 at API list prices, ...`, or
+`review.sh: cost: n/a` when Claude Code reported no `total_cost_usd`; a missing field is null and
+never fails the run. `model` is the model asked for, `models` what `modelUsage` reports per model
+id; the token counts are summed over `modelUsage` (every model the run used) or, without it, taken
+from `usage`. `number` is the pull request, null for dispatched audits.
+
+`total_cost_usd` is Claude Code's client-side estimate at API list prices (`modelUsage` says
+`"costBasis": "list"`), not what the Max subscription charges.
+
+`post.sh` appends the record to the review body, the audit issue body and the failure notice as
+one hidden line, `<!-- ai-review-cost: {...} -->`. Gitea does not render HTML comments, so the
+post looks the same; the line holds numbers, the mode, the model names, the repository and the
+number, nothing else. The re-review history leaves the line out. A failed audit posts nothing, so
+its cost is only in the job log.
+
+`scripts/cost-report.sh` sums the records from the workstation, read-only, with
+`tea api --login git` like the other workstation scripts:
+
+```bash
+scripts/cost-report.sh                                # orgs Ansible Infrastructure DevOps CICD
+scripts/cost-report.sh --since 2026-11-01 Ansible     # one org, runs from that day (UTC) on
+```
+
+It lists the repositories of the orgs in pages of 50, reads the reviews of every pull request, the
+issues and the issue comments, keeps only lines posted by `gitea-actions` (`BOT_LOGIN`) and counts
+a record posted twice once. It prints runs, cost and tokens per month, per model and per mode, and
+the grand total. `--since` also skips issues and pull requests not updated since that day (posting
+a review or comment updates them), so it is much faster than a full scan, which reads every pull
+request. A failed API call is named on stderr and makes the exit status 1.
 
 ## Tests
 

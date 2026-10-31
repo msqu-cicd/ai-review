@@ -30,7 +30,11 @@ load() {
 for file in tests/test_*.sh; do
   mapfile -t fns < <(bash -c "$(declare -f load); load '$file'; declare -F" | awk '$3 ~ /^test_/ {print $3}')
   for fn in "${fns[@]}"; do
-    if ( set -e; load "$file"; "$fn" ) >"$out" 2>&1; then
+    # A plain command, never an if condition or part of || or &&: bash ignores set -e in there,
+    # and only the last command of a test would count.
+    ( set -e; load "$file"; "$fn" ) >"$out" 2>&1
+    rc=$?
+    if [[ $rc -eq 0 ]]; then
       pass=$((pass + 1))
     else
       fail=$((fail + 1))

@@ -106,6 +106,8 @@ jobs:
           EXCLUDE_PATHS: ${{ inputs.exclude_paths }}
           MAX_DIFF_LINES: ${{ inputs.max_diff_lines }}
           AI_REVIEW_DIR: ${{ github.workspace }}/ai-review
+          # Only for the cost record in out/cost.json.
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
         run: |
           claude --version
           # The model's process must not see the job token (it is only needed to post).
@@ -118,6 +120,8 @@ jobs:
           MODEL: ${{ steps.gate.outputs.model }}
           PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
           HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
+          # The run's cost estimate goes into the body as a hidden line (scripts/cost-report.sh).
+          COST_FILE: out/cost.json
         run: |
           source ai-review/scripts/lib.sh
           if [[ "$MODE" == audit ]]; then
@@ -133,6 +137,8 @@ jobs:
         if: failure() && steps.gate.outputs.run == 'true' && steps.gate.outputs.pr_number != ''
         env:
           PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+          # A failed run that reached the model costs too.
+          COST_FILE: out/cost.json
         run: |
           mkdir -p out
           if [[ -s out/skip-reason.txt ]]; then

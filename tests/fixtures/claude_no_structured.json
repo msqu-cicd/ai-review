@@ -17,11 +17,15 @@
   },
   "modelUsage": {
     "claude-opus-5-5": {
-      "input_tokens": 2,
-      "cache_creation_input_tokens": 4325,
-      "cache_read_input_tokens": 3232,
-      "output_tokens": 929,
-      "service_tier": "standard"
+      "inputTokens": 2,
+      "outputTokens": 929,
+      "cacheReadInputTokens": 3232,
+      "cacheCreationInputTokens": 4325,
+      "webSearchRequests": 0,
+      "costUSD": 0.12,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "costBasis": "list"
     }
   }
 }

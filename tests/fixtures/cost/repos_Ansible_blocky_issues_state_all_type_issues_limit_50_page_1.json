@@ -1,0 +1,18 @@
+[
+ {
+  "number": 9,
+  "user": {
+   "login": "gitea-actions"
+  },
+  "title": "AI audit 2026-10-31 (opus)",
+  "body": "The role is in good shape.\n\n### minor\n- tasks/main.yml:3 Missing mode.\n\n<!-- ai-review-cost: {\"mode\":\"audit\",\"model\":\"opus\",\"repo\":\"Ansible/blocky\",\"number\":null,\"timestamp\":\"2026-10-31T08:00:00Z\",\"total_cost_usd\":1.25,\"duration_ms\":300000,\"num_turns\":30,\"input_tokens\":2000,\"output_tokens\":500,\"cache_read_input_tokens\":8000,\"cache_creation_input_tokens\":1000,\"models\":{\"claude-opus-5-5\":{\"cost_usd\":1.25,\"input_tokens\":2000,\"output_tokens\":500,\"cache_read_input_tokens\":8000,\"cache_creation_input_tokens\":1000}}} -->"
+ },
+ {
+  "number": 10,
+  "user": {
+   "login": "micha"
+  },
+  "title": "Copy of the audit",
+  "body": "<!-- ai-review-cost: {\"mode\":\"audit\",\"model\":\"opus\",\"repo\":\"Ansible/blocky\",\"number\":null,\"timestamp\":\"2026-10-31T08:00:00Z\",\"total_cost_usd\":9.25,\"duration_ms\":300000,\"num_turns\":30,\"input_tokens\":2000,\"output_tokens\":500,\"cache_read_input_tokens\":8000,\"cache_creation_input_tokens\":1000,\"models\":{\"claude-opus-5-5\":{\"cost_usd\":9.25,\"input_tokens\":2000,\"output_tokens\":500,\"cache_read_input_tokens\":8000,\"cache_creation_input_tokens\":1000}}} -->"
+ }
+]

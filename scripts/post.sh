@@ -7,7 +7,9 @@
 #        post.sh issue PAYLOAD_FILE              POST issues
 #        post.sh label-id NAME COLOR             print the label id, creating the label if needed
 # Env: GITEA_TOKEN, GITHUB_API_URL, GITHUB_REPOSITORY; AI_REVIEW_DRY_RUN prints "METHOD URL" and
-# the payload instead of calling the API.
+# the payload instead of calling the API. COST_FILE (optional): review.sh's cost.json; when it holds
+# a record, the review, comment or issue body ends with it as one hidden line,
+# "<!-- ai-review-cost: {...} -->" (read by scripts/cost-report.sh, not rendered by Gitea).
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -26,8 +28,19 @@ esac
 base="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
 
 resp=$(mktemp)
-trap 'rm -f "$resp"' EXIT
+posted=$(mktemp)
+trap 'rm -f "$resp" "$posted"' EXIT
 http_code=000
+cost_line=$(cost_comment "${COST_FILE:-}")
+
+# with_cost PAYLOAD_FILE: copy the payload to $posted, with the cost line appended to its body.
+with_cost() {
+  if [[ -n $cost_line ]]; then
+    jq --arg c "$cost_line" '.body += "\n\n" + $c' "$1" > "$posted"
+  else
+    cp "$1" "$posted"
+  fi
+}
 
 # api METHOD URL [PAYLOAD_FILE]: call the Gitea API; the body lands in $resp, the status in
 # $http_code. In dry-run mode prints the request instead and pretends 200.
@@ -56,7 +69,8 @@ fail_with_body() {
 case $kind in
   review)
     pr=$2 payload=$3
-    api POST "$base/pulls/$pr/reviews" "$payload"
+    with_cost "$payload"
+    api POST "$base/pulls/$pr/reviews" "$posted"
     if ok; then
       echo "post.sh: review posted on PR $pr"
     elif [[ $http_code == 4* ]]; then
@@ -65,6 +79,7 @@ case $kind in
       jq -r '.body + (if (.comments | length) > 0
                       then "\n\n### Inline findings\n" + (.comments | map("- " + .path + ":" + (.new_position | tostring) + " " + .body) | join("\n"))
                       else "" end)' "$payload" > "$text"
+      [[ -z $cost_line ]] || printf '\n%s\n' "$cost_line" >> "$text"
       comment_payload=$(mktemp)
       build_comment_payload "$(cat "$text")" > "$comment_payload"
       api POST "$base/issues/$pr/comments" "$comment_payload"
@@ -78,7 +93,9 @@ case $kind in
   comment)
     pr=$2 text_file=$3
     comment_payload=$(mktemp)
-    build_comment_payload "$(cat "$text_file")" > "$comment_payload"
+    body=$(cat "$text_file")
+    [[ -z $cost_line ]] || body+=$'\n\n'$cost_line
+    build_comment_payload "$body" > "$comment_payload"
     api POST "$base/issues/$pr/comments" "$comment_payload"
     rm -f "$comment_payload"
     ok || fail_with_body "comment"
@@ -86,7 +103,8 @@ case $kind in
     ;;
   issue)
     payload=$2
-    api POST "$base/issues" "$payload"
+    with_cost "$payload"
+    api POST "$base/issues" "$posted"
     ok || fail_with_body "issue"
     [[ -n ${AI_REVIEW_DRY_RUN:-} ]] || echo "post.sh: issue created: $(jq -r '.html_url // .number' "$resp")"
     ;;

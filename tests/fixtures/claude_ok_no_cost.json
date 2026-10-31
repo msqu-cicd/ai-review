@@ -1,0 +1,31 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "result": "{\"summary\": \"...\"}",
+  "session_id": "00000000-0000-0000-0000-000000000001",
+  "structured_output": {
+    "summary": "Adds remote_src to the unarchive task so the download is extracted on the target. One task still runs as root with a world-readable mode.",
+    "verdict": "request_changes",
+    "findings": [
+      {
+        "path": "tasks/main.yml",
+        "line": 12,
+        "severity": "major",
+        "body": "remote_src: true extracts a file that is never checksum-verified; add checksum: to the download task."
+      },
+      {
+        "path": "tasks/main.yml",
+        "line": 99,
+        "severity": "minor",
+        "body": "The config template task lacks owner/group/mode."
+      },
+      {
+        "path": "README.md",
+        "line": null,
+        "severity": "nit",
+        "body": "The new variable is not documented."
+      }
+    ]
+  }
+}
