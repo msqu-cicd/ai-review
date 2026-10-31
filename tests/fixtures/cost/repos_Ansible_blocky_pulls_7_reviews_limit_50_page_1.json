@@ -1,0 +1,56 @@
+[
+ {
+  "id": 1,
+  "user": {
+   "login": "gitea-actions"
+  },
+  "state": "COMMENT",
+  "submitted_at": "2026-10-29T10:00:00Z",
+  "body": "## AI review (opus)\n\nAn older review, posted before the cost record existed."
+ },
+ {
+  "id": 2,
+  "user": {
+   "login": "gitea-actions"
+  },
+  "state": "COMMENT",
+  "submitted_at": "2026-10-30T10:00:00Z",
+  "body": "## AI review (opus)\n\n**Changes requested**\n\nAdds the blocky role.\n\n### Not placed in the diff\n- **nit** README.md Not documented.\n\n<!-- ai-review-cost: {\"mode\":\"pr\",\"model\":\"opus\",\"repo\":\"Ansible/blocky\",\"number\":7,\"timestamp\":\"2026-10-30T10:00:00Z\",\"total_cost_usd\":0.5,\"duration_ms\":120000,\"num_turns\":12,\"input_tokens\":1000,\"output_tokens\":200,\"cache_read_input_tokens\":3000,\"cache_creation_input_tokens\":400,\"models\":{\"claude-opus-5-5\":{\"cost_usd\":0.45,\"input_tokens\":900,\"output_tokens\":180,\"cache_read_input_tokens\":3000,\"cache_creation_input_tokens\":400},\"claude-haiku-5-5\":{\"cost_usd\":0.05,\"input_tokens\":100,\"output_tokens\":20,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}} -->"
+ },
+ {
+  "id": 3,
+  "user": {
+   "login": "mallory"
+  },
+  "state": "COMMENT",
+  "submitted_at": "2026-10-30T11:00:00Z",
+  "body": "Looks fine.\n\n<!-- ai-review-cost: {\"mode\":\"pr\",\"model\":\"opus\",\"repo\":\"Ansible/blocky\",\"number\":7,\"timestamp\":\"2026-10-30T10:00:00Z\",\"total_cost_usd\":100,\"duration_ms\":120000,\"num_turns\":12,\"input_tokens\":1000,\"output_tokens\":200,\"cache_read_input_tokens\":3000,\"cache_creation_input_tokens\":400,\"models\":{}} -->"
+ },
+ {
+  "id": 4,
+  "user": {
+   "login": "gitea-actions"
+  },
+  "state": "COMMENT",
+  "submitted_at": "2026-10-30T12:00:00Z",
+  "body": "## AI review (opus)\n\nBroken record.\n\n<!-- ai-review-cost: {\"mode\":\"pr\",\"total_cost_usd\":7 -->"
+ },
+ {
+  "id": 5,
+  "user": {
+   "login": "gitea-actions"
+  },
+  "state": "COMMENT",
+  "submitted_at": "2026-11-02T09:00:00Z",
+  "body": "## AI review (sonnet)\n\nRe-review.\r\n\r\n<!-- ai-review-cost: {\"mode\":\"comment\",\"model\":\"sonnet\",\"repo\":\"Ansible/blocky\",\"number\":7,\"timestamp\":\"2026-11-02T09:00:00Z\",\"total_cost_usd\":0.2,\"duration_ms\":60000,\"num_turns\":6,\"input_tokens\":500,\"output_tokens\":100,\"cache_read_input_tokens\":1000,\"cache_creation_input_tokens\":200,\"models\":{\"claude-sonnet-5-5\":{\"cost_usd\":0.2,\"input_tokens\":500,\"output_tokens\":100,\"cache_read_input_tokens\":1000,\"cache_creation_input_tokens\":200}}} -->\r\n"
+ },
+ {
+  "id": 6,
+  "user": {
+   "login": "gitea-actions"
+  },
+  "state": "COMMENT",
+  "submitted_at": "2026-11-02T10:00:00Z",
+  "body": "## AI review (opus)\n\nThe record only counts on a line of its own: <!-- ai-review-cost: {\"mode\":\"pr\",\"model\":\"opus\",\"repo\":\"Ansible/blocky\",\"number\":7,\"timestamp\":\"2026-10-30T10:00:00Z\",\"total_cost_usd\":100,\"duration_ms\":120000,\"num_turns\":12,\"input_tokens\":1000,\"output_tokens\":200,\"cache_read_input_tokens\":3000,\"cache_creation_input_tokens\":400,\"models\":{}} -->"
+ }
+]

@@ -120,7 +120,7 @@ jobs:
           MODEL: ${{ steps.gate.outputs.model }}
           PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
           HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
-          # The run's cost estimate goes into the body as a hidden line.
+          # The run's cost estimate goes into the body as a hidden line (scripts/cost-report.sh).
           COST_FILE: out/cost.json
         run: |
           source ai-review/scripts/lib.sh

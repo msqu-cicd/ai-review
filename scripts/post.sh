@@ -9,7 +9,7 @@
 # Env: GITEA_TOKEN, GITHUB_API_URL, GITHUB_REPOSITORY; AI_REVIEW_DRY_RUN prints "METHOD URL" and
 # the payload instead of calling the API. COST_FILE (optional): review.sh's cost.json; when it holds
 # a record, the review, comment or issue body ends with it as one hidden line,
-# "<!-- ai-review-cost: {...} -->", which Gitea does not render.
+# "<!-- ai-review-cost: {...} -->" (read by scripts/cost-report.sh, not rendered by Gitea).
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

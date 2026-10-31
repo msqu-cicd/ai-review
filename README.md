@@ -124,6 +124,21 @@ post looks the same; the line holds numbers, the mode, the model names, the repo
 number, nothing else. The re-review history leaves the line out. A failed audit posts nothing, so
 its cost is only in the job log.
 
+`scripts/cost-report.sh` sums the records from the workstation, read-only, with
+`tea api --login git` like the other workstation scripts:
+
+```bash
+scripts/cost-report.sh                                # orgs Ansible Infrastructure DevOps CICD
+scripts/cost-report.sh --since 2026-11-01 Ansible     # one org, runs from that day (UTC) on
+```
+
+It lists the repositories of the orgs in pages of 50, reads the reviews of every pull request, the
+issues and the issue comments, keeps only lines posted by `gitea-actions` (`BOT_LOGIN`) and counts
+a record posted twice once. It prints runs, cost and tokens per month, per model and per mode, and
+the grand total. `--since` also skips issues and pull requests not updated since that day (posting
+a review or comment updates them), so it is much faster than a full scan, which reads every pull
+request. A failed API call is named on stderr and makes the exit status 1.
+
 ## Tests
 
 ```bash

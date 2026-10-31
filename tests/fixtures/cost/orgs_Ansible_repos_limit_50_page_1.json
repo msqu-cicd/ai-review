@@ -1,0 +1,12 @@
+[
+ {
+  "full_name": "Ansible/blocky",
+  "has_issues": true,
+  "has_pull_requests": true
+ },
+ {
+  "full_name": "Ansible/no-units",
+  "has_issues": false,
+  "has_pull_requests": false
+ }
+]

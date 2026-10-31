@@ -441,3 +441,15 @@ cost_comment() {
   jq -r 'select(type == "object") | "<!-- ai-review-cost: " + (tojson | gsub("<"; "\\u003c") | gsub(">"; "\\u003e")) + " -->"' \
     "$1" 2>/dev/null || true
 }
+
+# cost_records LIST_JSON_FILE BOT_LOGIN: every cost record in the bodies of a Gitea list (reviews,
+# issues or comments) that BOT_LOGIN posted, one compact JSON object per line. Only a whole line
+# of the form cost_comment writes counts; lines that do not parse are skipped.
+cost_records() {
+  jq -c --arg bot "$2" '
+    .[] | select((.user.login // "") == $bot)
+    | (.body | strings) | split("\n")[] | sub("\r$"; "")
+    | capture("^<!-- ai-review-cost: (?<j>\\{.*\\}) -->$") | .j
+    | (try fromjson catch null) | objects
+  ' "$1"
+}

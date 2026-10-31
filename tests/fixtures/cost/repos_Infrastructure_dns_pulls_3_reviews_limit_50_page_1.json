@@ -1,0 +1,10 @@
+[
+ {
+  "id": 41,
+  "user": {
+   "login": "gitea-actions"
+  },
+  "state": "COMMENT",
+  "body": "## AI review (opus)\n\nNo estimate.\n\n<!-- ai-review-cost: {\"mode\":\"pr\",\"model\":\"opus\",\"repo\":\"Infrastructure/dns\",\"number\":3,\"timestamp\":\"2026-10-29T08:00:00Z\",\"total_cost_usd\":null,\"duration_ms\":null,\"num_turns\":null,\"input_tokens\":null,\"output_tokens\":null,\"cache_read_input_tokens\":null,\"cache_creation_input_tokens\":null,\"models\":{}} -->"
+ }
+]
