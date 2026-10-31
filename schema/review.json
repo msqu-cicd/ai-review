@@ -11,7 +11,7 @@
     "verdict": {
       "type": "string",
       "enum": ["comment", "request_changes"],
-      "description": "request_changes only when a blocker or major finding exists."
+      "description": "request_changes only when a blocker or major finding on a supported platform exists, otherwise comment."
     },
     "findings": {
       "type": "array",

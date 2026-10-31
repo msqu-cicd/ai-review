@@ -44,6 +44,23 @@ test_pr_review_body_changes_requested() {
   pr_payload | jq -r .body | grep -q '^\*\*Changes requested\*\*'
 }
 
+# The line follows the severities, so a verdict that disagrees with the findings cannot show it.
+test_pr_review_no_changes_requested_without_blocker_or_major() {
+  local r body
+  r=$(mktemp)
+  jq '.findings |= map(select(.severity != "major"))' "$(structured)" > "$r"
+  assert_eq request_changes "$(jq -r .verdict "$r")"
+  body=$(build_pr_review_payload "$r" abc123 "$(fixture sample.diff)" opus | jq -r .body)
+  assert_exit 1 grep -q 'Changes requested' <<<"$body"
+}
+
+test_pr_review_changes_requested_on_blocker() {
+  local r
+  r=$(mktemp)
+  jq '.verdict = "comment" | .findings = [{path: "a.yml", line: null, severity: "blocker", body: "x"}]' "$(structured)" > "$r"
+  build_pr_review_payload "$r" abc123 "$(fixture sample.diff)" opus | jq -r .body | grep -q '^\*\*Changes requested\*\*'
+}
+
 test_issue_payload_title_and_label() {
   assert_eq 'AI audit 2026-11-01 (opus) 7' "$(build_issue_payload "$(structured)" 2026-11-01 opus 7 | jq -r '[.title, (.labels[0]|tostring)]|join(" ")')"
 }

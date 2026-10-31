@@ -1,0 +1,9 @@
+[
+  {"id": 13, "user": {"login": "micha"}, "state": "COMMENT", "comments_count": 1, "dismissed": false,
+   "commit_id": "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "submitted_at": "2026-10-30T12:00:00Z", "body": ""},
+  {"id": 14, "user": {"login": "gitea-actions"}, "state": "COMMENT", "comments_count": 0, "dismissed": true,
+   "commit_id": "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "submitted_at": "2026-10-30T12:30:00Z", "body": "## AI review (opus)\n\nDISMISSED-MARKER"},
+  {"id": 15, "user": {"login": "gitea-actions"}, "state": "COMMENT", "comments_count": 0, "stale": false, "dismissed": false,
+   "commit_id": "2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "submitted_at": "2026-10-31T09:00:00Z",
+   "body": "## AI review (sonnet)\n\nThe checksum is verified now. NEWEST-REVIEW-MARKER"}
+]

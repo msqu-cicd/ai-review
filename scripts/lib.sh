@@ -248,7 +248,8 @@ _jq_finding_ref='(.path + (if .line != null then ":" + (.line | tostring) else "
 
 # build_pr_review_payload REVIEW_JSON_FILE HEAD_SHA DIFF_FILE MODEL: Gitea
 # CreatePullReviewOptions with event COMMENT; findings on new-side diff lines become
-# inline comments, the rest are listed in the body.
+# inline comments, the rest are listed in the body. The "Changes requested" line follows the
+# severities, not the model's verdict: it shows exactly when a blocker or major finding exists.
 build_pr_review_payload() {
   local review=$1 sha=$2 diff=$3 model=$4 placeable
   placeable=$(diff_new_side_lines "$diff" | jq -R -s 'split("\n") | map(select(length > 0) | sub("\t"; ":"))')
@@ -261,7 +262,7 @@ build_pr_review_payload() {
         event: "COMMENT",
         commit_id: $sha,
         body: ("## AI review (" + $model + ")\n\n"
-               + (if $r.verdict == "request_changes" then "**Changes requested**\n\n" else "" end)
+               + (if any($r.findings[]; .severity | IN("blocker", "major")) then "**Changes requested**\n\n" else "" end)
                + $r.summary
                + (if ($rest | length) > 0
                   then "\n\n### Not placed in the diff\n"
@@ -290,4 +291,90 @@ build_issue_payload() {
                   ] | join("\n")))
       }
   ' "$review"
+}
+
+# --- pull request history ------------------------------------------------------------
+
+# render_history REVIEWS_JSON INLINE_JSON COMMENTS_JSON MAINTAINERS_JSON BOT_LOGIN PR_AUTHOR
+# MAX_BYTES: the earlier discussion on a pull request as Markdown, oldest first, from the Gitea
+# lists of reviews, their inline comments and the issue comments. Every person is marked
+# [maintainer] when the login is in the MAINTAINERS_JSON array and is not PR_AUTHOR, otherwise
+# [not a maintainer] or [PR author, not a maintainer]. AI reviews are what BOT_LOGIN posted under the
+# "## AI review" heading (as a review or, after a fallback, as a comment); its other comments
+# (failure notices), bare /review commands, and pending or dismissed reviews are left out.
+# Replies under an inline comment stay with it. Bodies are quoted; every other API field (path,
+# login, time, commit) goes through `field`, so none can open a line of its own. An entry is cut
+# at MAX_BYTES/4 characters, and the oldest entries are dropped, with a one-line note, until the
+# rest fits into MAX_BYTES (the newest one always stays). Prints nothing when there is no
+# discussion.
+render_history() {
+  jq -n -r --slurpfile reviews "$1" --slurpfile inline "$2" --slurpfile comments "$3" \
+    --slurpfile maintainers "$4" --arg bot "$5" --arg author "$6" --argjson max "$7" '
+    def quote: split("\r") | join("") | split("\n") | map("> " + .) | join("\n");
+    def cut($n): if length > $n then .[:$n] + "\n[cut: longer than \($n) characters]" else . end;
+    # a non-body field on one line: control characters and line/paragraph separators become "?",
+    # backticks are dropped, the rest goes inside backticks
+    def field: tostring | explode
+      | map(if . < 32 or . == 127 or . == 8232 or . == 8233 then 63 elif . == 96 then empty else . end)
+      | implode | "`" + . + "`";
+    def who: .user.login // "ghost";
+    def by_ai: who == $bot and ((.body // "") | startswith("## AI review"));
+    # the author of a human entry with the role that decides whether an answer counts
+    def person: who as $w
+      | ($w | field) + " "
+        + (if ($w | ascii_downcase) == ($author | ascii_downcase) then "[PR author, not a maintainer]"
+           elif any(($maintainers[0] // [])[]; . == $w) then "[maintainer]"
+           else "[not a maintainer]" end);
+    def where: (.path // "" | tostring) + (if (.position // 0) > 0 then ":" + (.position | tostring)
+                        elif (.original_position // 0) > 0 then " (old line " + (.original_position | tostring) + ")"
+                        else "" end);
+    # one thread: the inline comments on the same line, oldest first
+    def thread:
+      (map(.resolver.login // empty) | first) as $resolver
+      | "On " + (.[0] | where | field) + (if $resolver then " (resolved by " + ($resolver | field) + ")" else "" end) + ":\n"
+        + (map((if who == $bot then "" else person + ", " + (.created_at | field) + ":\n" end) + ((.body // "") | quote))
+           | join("\n"));
+    ($inline[0] // []) as $inline
+    | def threads($id):
+        [$inline[] | select(.pull_request_review_id == $id)] | sort_by(.id)
+        | group_by([.path, (.position // 0), (.original_position // 0)]) | sort_by(.[0].id)
+        | map(thread) | join("\n\n");
+      [ ($reviews[0] // [])[]
+        | select(.state != "PENDING" and .state != "REQUEST_REVIEW" and (.dismissed | not))
+        | (.body // "") as $body
+        | threads(.id) as $threads
+        | if by_ai then
+            {t: .submitted_at,
+             text: ("### Earlier AI review of commit " + ((.commit_id // "") | tostring | .[:7] | field) + ", " + (.submitted_at | field)
+                    + "\n\n" + ($body | quote)
+                    + (if $threads != "" then "\n\nInline comments:\n\n" + $threads else "" end))}
+          elif who == $bot or ($body == "" and $threads == "") then empty
+          else
+            {t: .submitted_at,
+             text: ("### Review by " + person
+                    + (if .state == "APPROVED" then " (approved)"
+                       elif .state == "REQUEST_CHANGES" then " (changes requested)" else "" end)
+                    + ", " + (.submitted_at | field)
+                    + (if $body != "" then "\n\n" + ($body | quote) else "" end)
+                    + (if $threads != "" then "\n\n" + $threads else "" end))}
+          end ]
+      + [ ($comments[0] // [])[]
+          | (.body // "") as $body
+          | if by_ai then
+              {t: .created_at, text: ("### Earlier AI review, posted as a comment, " + (.created_at | field) + "\n\n" + ($body | quote))}
+            elif who == $bot or $body == "" or ($body | test("\\A\\s*/review( +(opus|sonnet|audit))*\\s*\\z")) then empty
+            else
+              {t: .created_at, text: ("### Comment by " + person + ", " + (.created_at | field) + "\n\n" + ($body | quote))}
+            end ]
+    | sort_by(.t) | map(.text | cut($max / 4 | floor)) as $all
+    | (reduce ($all | reverse | .[]) as $e ({kept: [], bytes: 0, full: false};
+        if .full then .
+        elif (.kept | length) > 0 and .bytes + ($e | utf8bytelength) + 2 > $max then .full = true
+        else .kept = [$e] + .kept | .bytes += ($e | utf8bytelength) + 2 end)).kept as $kept
+    | (($all | length) - ($kept | length)) as $omitted
+    | if ($kept | length) == 0 then empty
+      else (if $omitted > 0 then "(" + ($omitted | tostring) + " older entries left out to keep this short.)\n\n" else "" end)
+           + ($kept | join("\n\n"))
+      end
+  '
 }

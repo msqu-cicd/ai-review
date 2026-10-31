@@ -1,0 +1,7 @@
+[
+  {"id": 11, "user": {"login": "gitea-actions"}, "state": "COMMENT", "comments_count": 4, "stale": true, "dismissed": false,
+   "commit_id": "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "submitted_at": "2026-10-30T10:00:00Z",
+   "body": "## AI review (opus)\n\n**Changes requested**\n\nAdds the blocky role; the download is not verified.\n\n### Not placed in the diff\n- **nit** README.md The new variable is not documented."},
+  {"id": 12, "user": {"login": "micha"}, "state": "PENDING", "comments_count": 0, "dismissed": false,
+   "commit_id": "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "submitted_at": "2026-10-30T10:30:00Z", "body": "PENDING-MARKER"}
+]
