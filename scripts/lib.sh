@@ -102,12 +102,13 @@ gate_decide() {
 # The path of a section is its b/ side.
 
 # _diff_sections DIFF_FILE: one line per section: "INDEX<TAB>PATH<TAB>VAULT" where VAULT is
-# 1 when the section carries a "$ANSIBLE_VAULT;" header line (added, removed or context, so
-# new, deleted and re-encrypted vault files all count).
+# 1 when the file is a vault on the new side: the "$ANSIBLE_VAULT;" header is an added or a
+# context line (new or re-encrypted vault). A removed header (vault turned into plaintext, or a
+# deleted vault) is a change the reviewer must see, so it does not count.
 _diff_sections() {
   awk '
     /^diff --git / { if (n) print n "\t" path "\t" vault; n++; path = $0; sub(/^diff --git a\/.* b\//, "", path); vault = 0; next }
-    /^[ +-]\$ANSIBLE_VAULT;/ { vault = 1 }
+    /^[ +]\$ANSIBLE_VAULT;/ { vault = 1 }
     END { if (n) print n "\t" path "\t" vault }
   ' "$1"
 }
@@ -132,19 +133,33 @@ _glob_matches() {
   return 1
 }
 
+# _drop_section PATH VAULT GLOBS_CSV: exit 0 when a diff section is not sent to the model.
+_drop_section() {
+  [[ $2 == 1 ]] || _is_lockfile "$1" || _glob_matches "$1" "$3"
+}
+
 # filter_diff DIFF_FILE EXCLUDE_GLOBS_CSV: print the diff without excluded paths,
-# lockfiles and vault files. Deleted, renamed and binary sections pass through. Exit 0.
+# lockfiles and files that are vaults on the new side. Deleted, renamed and binary sections
+# pass through. Exit 0.
 filter_diff() {
   local file=$1 globs=$2 drop=" " idx path vault
   while IFS=$'\t' read -r idx path vault; do
-    if [[ $vault == 1 ]] || _is_lockfile "$path" || _glob_matches "$path" "$globs"; then
-      drop+="$idx "
-    fi
+    _drop_section "$path" "$vault" "$globs" && drop+="$idx "
   done < <(_diff_sections "$file")
   awk -v drop="$drop" '
     /^diff --git / { n++; keep = index(drop, " " n " ") == 0 }
     keep { print }
   ' "$file"
+}
+
+# filter_diff_dropped DIFF_FILE EXCLUDE_GLOBS_CSV: the paths filter_diff removes, one per line,
+# so the reviewer can be told that they changed without seeing their content.
+filter_diff_dropped() {
+  local file=$1 globs=$2 idx path vault
+  while IFS=$'\t' read -r idx path vault; do
+    _drop_section "$path" "$vault" "$globs" && printf '%s\n' "$path"
+  done < <(_diff_sections "$file")
+  return 0
 }
 
 # diff_too_large DIFF_FILE MAX_LINES: exit 0 when the diff has more than MAX_LINES lines.

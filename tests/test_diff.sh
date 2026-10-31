@@ -21,6 +21,14 @@ test_filter_drops_modified_vault() { # re-encrypted vault: header is a context l
   assert_eq "" "$(filter_diff "$(fixture vault-modified.diff)" '' | grep '^diff --git' || true)"
 }
 
+test_filter_keeps_vault_turned_plaintext() { # removing the vault header is a change the reviewer must see
+  assert_eq "vars/secrets.yml" "$(filter_diff "$(fixture vault-to-plain.diff)" '' | grep '^diff --git' | sed 's#.* b/##')"
+}
+
+test_filter_dropped_lists_paths() {
+  assert_eq $'vars/secrets.yml\npoetry.lock' "$(filter_diff_dropped "$(fixture sample.diff)" '')"
+}
+
 test_glob_matches_ignores_cwd_files() { # patterns must not be pathname-expanded in the caller's cwd
   local d
   d=$(mktemp -d)

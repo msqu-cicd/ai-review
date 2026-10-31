@@ -57,6 +57,11 @@ else
   git -C "$repo_dir" diff "$BASE_SHA...$HEAD_SHA" > "$out/raw.diff"
   filter_diff "$out/raw.diff" "$EXCLUDE_PATHS" > "$out/pr.diff"
   task="Review the pull request diff given on stdin. Repository: $repo_name, base branch: ${BASE_REF:-unknown}."
+  dropped=$(filter_diff_dropped "$out/raw.diff" "$EXCLUDE_PATHS" | paste -sd ',' - | sed 's/,/, /g')
+  if [[ -n $dropped ]]; then
+    task="$task These changed files are hidden from the diff because they are vault files, lockfiles or excluded paths; note that they changed, do not guess their content: $dropped."
+    echo "review.sh: hidden from the diff: $dropped"
+  fi
   if diff_too_large "$out/pr.diff" "$MAX_DIFF_LINES"; then
     diff_file_list "$out/pr.diff" > "$out/files.txt"
     stdin_file="$out/files.txt"
