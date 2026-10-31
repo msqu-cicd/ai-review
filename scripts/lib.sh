@@ -301,7 +301,8 @@ build_issue_payload() {
 # [maintainer] when the login is in the MAINTAINERS_JSON array and is not PR_AUTHOR, otherwise
 # [not a maintainer] or [PR author, not a maintainer]. AI reviews are what BOT_LOGIN posted under the
 # "## AI review" heading (as a review or, after a fallback, as a comment); its other comments
-# (failure notices), bare /review commands, and pending or dismissed reviews are left out.
+# (failure notices), bare /review commands, and pending or dismissed reviews are left out, and so is
+# the hidden cost line at the end of an AI review.
 # Replies under an inline comment stay with it. Bodies are quoted; every other API field (path,
 # login, time, commit) goes through `field`, so none can open a line of its own. An entry is cut
 # at MAX_BYTES/4 characters, and the oldest entries are dropped, with a one-line note, until the
@@ -311,6 +312,8 @@ render_history() {
   jq -n -r --slurpfile reviews "$1" --slurpfile inline "$2" --slurpfile comments "$3" \
     --slurpfile maintainers "$4" --arg bot "$5" --arg author "$6" --argjson max "$7" '
     def quote: split("\r") | join("") | split("\n") | map("> " + .) | join("\n");
+    # an AI review body without the hidden cost line post.sh appends (bookkeeping, not discussion)
+    def uncost: split("\n") | map(select(test("^<!-- ai-review-cost: .* -->\r?$") | not)) | join("\n") | sub("\\s+\\z"; "");
     def cut($n): if length > $n then .[:$n] + "\n[cut: longer than \($n) characters]" else . end;
     # a non-body field on one line: control characters and line/paragraph separators become "?",
     # backticks are dropped, the rest goes inside backticks
@@ -346,7 +349,7 @@ render_history() {
         | if by_ai then
             {t: .submitted_at,
              text: ("### Earlier AI review of commit " + ((.commit_id // "") | tostring | .[:7] | field) + ", " + (.submitted_at | field)
-                    + "\n\n" + ($body | quote)
+                    + "\n\n" + ($body | uncost | quote)
                     + (if $threads != "" then "\n\nInline comments:\n\n" + $threads else "" end))}
           elif who == $bot or ($body == "" and $threads == "") then empty
           else
@@ -361,7 +364,7 @@ render_history() {
       + [ ($comments[0] // [])[]
           | (.body // "") as $body
           | if by_ai then
-              {t: .created_at, text: ("### Earlier AI review, posted as a comment, " + (.created_at | field) + "\n\n" + ($body | quote))}
+              {t: .created_at, text: ("### Earlier AI review, posted as a comment, " + (.created_at | field) + "\n\n" + ($body | uncost | quote))}
             elif who == $bot or $body == "" or ($body | test("\\A\\s*/review( +(opus|sonnet|audit))*\\s*\\z")) then empty
             else
               {t: .created_at, text: ("### Comment by " + person + ", " + (.created_at | field) + "\n\n" + ($body | quote))}
@@ -377,4 +380,64 @@ render_history() {
            + ($kept | join("\n\n"))
       end
   '
+}
+
+# --- cost estimate ---------------------------------------------------------------------
+# Claude Code reports what a run would have cost at API list prices (total_cost_usd; modelUsage
+# carries costBasis "list"). The subscription charges nothing per run; the record is there to
+# compare the two.
+
+# build_cost_record CLAUDE_JSON_FILE MODE MODEL REPO NUMBER TIMESTAMP: the cost record of one
+# claude run as one compact JSON line: mode, model (opus|sonnet as asked), repo, number (the PR,
+# null when NUMBER is not a number), timestamp, total_cost_usd, duration_ms, num_turns, the token
+# counts and models (per model id: cost_usd and token counts). Token counts are summed over
+# modelUsage, which covers every model the run used, and taken from usage without it. Every value
+# Claude Code did not report as a number is null. Exit 1 when the file is not a JSON object.
+build_cost_record() {
+  jq -e -c --arg mode "$2" --arg model "$3" --arg repo "$4" --arg number "$5" --arg ts "$6" '
+    def num: if type == "number" then . else null end;
+    def obj: if type == "object" then . else {} end;
+    def per_model: obj | {cost_usd: (.costUSD | num), input_tokens: (.inputTokens | num),
+      output_tokens: (.outputTokens | num), cache_read_input_tokens: (.cacheReadInputTokens | num),
+      cache_creation_input_tokens: (.cacheCreationInputTokens | num)};
+    def sum($k): map(.[$k]) | add;
+    select(type == "object")
+    | ((.modelUsage | obj) | with_entries(select(.key | test("^[A-Za-z0-9._:@/\\[\\]-]{1,100}$")) | .value |= per_model)) as $models
+    | (if ($models | length) > 0
+       then [$models[]] | {input_tokens: sum("input_tokens"), output_tokens: sum("output_tokens"),
+                           cache_read_input_tokens: sum("cache_read_input_tokens"),
+                           cache_creation_input_tokens: sum("cache_creation_input_tokens")}
+       else .usage | obj | {input_tokens: (.input_tokens | num), output_tokens: (.output_tokens | num),
+                            cache_read_input_tokens: (.cache_read_input_tokens | num),
+                            cache_creation_input_tokens: (.cache_creation_input_tokens | num)}
+       end) as $tokens
+    | {mode: $mode, model: $model, repo: $repo,
+       number: (if ($number | test("^[0-9]+$")) then ($number | tonumber) else null end),
+       timestamp: $ts, total_cost_usd: (.total_cost_usd | num), duration_ms: (.duration_ms | num),
+       num_turns: (.num_turns | num)}
+      + $tokens + {models: $models}
+  ' "$1" 2>/dev/null || return 1
+}
+
+# cost_log_line COST_JSON_FILE: one line for the job log, "cost estimate $X at API list prices
+# (...)", or "cost: n/a" when the record has no total_cost_usd or cannot be read.
+cost_log_line() {
+  jq -r '
+    def n: if . == null then "n/a" else tostring end;
+    if (.total_cost_usd | type) != "number" then "cost: n/a"
+    else "cost estimate $\((.total_cost_usd * 10000 | round) / 10000) at API list prices, not charged on the subscription ("
+         + "\(.model), \(.num_turns | n) turns, \(if .duration_ms == null then "n/a" else "\((.duration_ms / 100 | round) / 10) s" end); "
+         + "tokens: input \(.input_tokens | n), output \(.output_tokens | n), cache read \(.cache_read_input_tokens | n), "
+         + "cache write \(.cache_creation_input_tokens | n); models: \(.models // {} | keys | join(", ") | if . == "" then "n/a" else . end))"
+    end
+  ' "$1" 2>/dev/null || echo "cost: n/a"
+}
+
+# cost_comment COST_JSON_FILE: the record as one hidden line, "<!-- ai-review-cost: {...} -->", for
+# the end of a posted body; nothing when the file is missing, empty or not a JSON object. "<" and
+# ">" become JSON escapes, so nothing in the record can close the comment.
+cost_comment() {
+  [[ -n ${1:-} && -s $1 ]] || return 0
+  jq -r 'select(type == "object") | "<!-- ai-review-cost: " + (tojson | gsub("<"; "\\u003c") | gsub(">"; "\\u003e")) + " -->"' \
+    "$1" 2>/dev/null || true
 }

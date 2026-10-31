@@ -6,9 +6,10 @@
 #   MODEL  opus | sonnet
 # Env: BASE_SHA, HEAD_SHA (PR modes), DEFAULT_BRANCH (audit: where the repository context is read),
 #      BASE_REF, GITHUB_REPOSITORY, EXCLUDE_PATHS (csv globs), MAX_DIFF_LINES (4000), AI_REVIEW_DIR
-#      (this repo; default: parent of scripts/), CLAUDE_BIN (claude).
+#      (this repo; default: parent of scripts/), CLAUDE_BIN (claude), PR_NUMBER (for the cost record).
 # Reads OUT_DIR/history.md (scripts/history.sh) in PR modes when present.
-# Writes OUT_DIR/{system.md,context.raw,context.md,raw.diff,pr.diff,files.txt,claude.json,review.json}.
+# Writes OUT_DIR/{system.md,context.raw,context.md,raw.diff,pr.diff,files.txt,claude.json,review.json}
+# and OUT_DIR/cost.json, the cost estimate of the claude run (also when the run failed).
 # Exit 1 when Claude fails or returns no valid structured output; OUT_DIR/review.json is the result.
 set -euo pipefail
 
@@ -159,6 +160,7 @@ $fence"
 fi
 
 rc=0
+rm -f "$out/cost.json"
 (
   cd "$repo_dir"
   "$CLAUDE_BIN" --restricted --tools "Read,Grep,Glob" --permission-mode dontAsk \
@@ -172,6 +174,14 @@ if [[ -s $out/claude.json ]]; then
   jq '{models: ((.modelUsage // {}) | keys), turns: .num_turns, duration_ms, is_error,
        usage: ((.usage // {}) | {input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens})}' \
     "$out/claude.json" 2>/dev/null || echo "review.sh: claude.json is not JSON" >&2
+fi
+# What the run would have cost at API list prices; a failed run costs too. Never fails the run.
+if [[ -s $out/claude.json ]] \
+  && build_cost_record "$out/claude.json" "$mode" "$model" "$repo_name" "${PR_NUMBER:-}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$out/cost.json"; then
+  echo "review.sh: $(cost_log_line "$out/cost.json")"
+else
+  rm -f "$out/cost.json"
+  echo "review.sh: cost: n/a"
 fi
 if [[ $rc -ne 0 ]]; then
   echo "review.sh: claude exited $rc" >&2

@@ -358,3 +358,94 @@ test_review_leaves_out_history_with_a_real_secret() {
   [[ -s $d/review.json ]]
   assert_exit 1 grep -q 'github_token' "$args"
 }
+
+# --- cost estimate -----------------------------------------------------------------------
+
+test_review_writes_cost_json() {
+  local d log
+  d=$(mktemp -d)
+  log=$(PR_NUMBER=7 GITHUB_REPOSITORY=Ansible/blocky review_fake claude_ok.json pr "$(two_commit_repo)" "$d")
+  assert_eq 'pr opus Ansible/blocky 7 0.12 3' "$(jq -r '[.mode, .model, .repo, .number, .total_cost_usd, .num_turns] | join(" ")' "$d/cost.json")"
+  jq -e '.timestamp | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")' "$d/cost.json" > /dev/null
+  # shellcheck disable=SC2016 # a literal dollar sign
+  grep -q '^review.sh: cost estimate \$0.12 at API list prices' <<<"$log"
+}
+
+test_review_logs_cost_na_without_cost_fields() { # the review itself still succeeds
+  local d log
+  d=$(mktemp -d)
+  log=$(review_fake claude_ok_no_cost.json pr "$(two_commit_repo)" "$d")
+  grep -q '^review.sh: cost: n/a$' <<<"$log"
+  [[ -s $d/review.json ]]
+  assert_eq 'null null' "$(jq -r '[.total_cost_usd, .number] | map(tojson) | join(" ")' "$d/cost.json")"
+}
+
+test_review_writes_cost_json_when_the_run_fails() { # a failed run costs too
+  local d
+  d=$(mktemp -d)
+  assert_exit 1 review_fake claude_is_error.json pr "$(two_commit_repo)" "$d"
+  assert_eq 0.12 "$(jq .total_cost_usd "$d/cost.json")"
+}
+
+test_review_without_json_output_has_no_cost_json() {
+  local d f log
+  d=$(mktemp -d)
+  f=$(mktemp)
+  echo 'Segmentation fault' > "$f"
+  log=$(CLAUDE_BIN="$REPO_ROOT/tests/fake_claude.sh" FAKE_CLAUDE_OUTPUT="$f" BASE_SHA=HEAD~1 HEAD_SHA=HEAD \
+    AI_REVIEW_DIR="$REPO_ROOT" GITLEAKS_BIN=/bin/true scripts/review.sh pr opus "$(two_commit_repo)" "$d" 2> /dev/null) || true
+  grep -q '^review.sh: cost: n/a$' <<<"$log"
+  [[ ! -e $d/cost.json ]]
+}
+
+cost_file() { # -> path of the cost record of claude_ok.json
+  local f
+  f=$(mktemp)
+  build_cost_record "$(fixture claude_ok.json)" pr opus o/r 6 2026-10-31T12:00:00Z > "$f"
+  printf '%s' "$f"
+}
+
+dry_payload() { # KIND ARGS... -> the payload post.sh would send (dry run); COST_FILE comes from the caller
+  post_dry "$@" | sed -e 1d -e '/^post\.sh: /d'
+}
+
+posted_body() { # KIND ARGS... -> the body of that payload
+  dry_payload "$@" | jq -r .body
+}
+
+# The body gains exactly a blank line and one HTML comment line (Gitea does not render comments);
+# the comment holds the record as compact JSON.
+assert_hidden_cost_line() { # ORIGINAL_BODY POSTED_BODY
+  local last
+  last=${2##*$'\n'}
+  [[ $last =~ ^'<!-- ai-review-cost: {'[^$'\n']*'} -->'$ ]] || { echo "last line is not the cost comment: $last" >&2; return 1; }
+  assert_eq "$1"$'\n\n'"$last" "$2" "visible text unchanged"
+  assert_json_eq "$(cat "$(cost_file)")" "$(sed -e 's/^<!-- ai-review-cost: //' -e 's/ -->$//' <<<"$last")"
+}
+
+test_post_review_appends_hidden_cost_line() {
+  local body
+  body=$(COST_FILE=$(cost_file) posted_body review 6 "$(fixture review_payload.json)")
+  assert_hidden_cost_line "$(jq -r .body "$(fixture review_payload.json)")" "$body"
+  [[ $body == "## AI review (opus)"$'\n'* ]]
+}
+
+test_post_issue_appends_hidden_cost_line() {
+  assert_hidden_cost_line "$(jq -r .body "$(fixture issue_payload.json)")" \
+    "$(COST_FILE=$(cost_file) posted_body issue "$(fixture issue_payload.json)")"
+}
+
+test_post_comment_appends_hidden_cost_line() { # failure notices: a failed run costs too
+  local t
+  t=$(mktemp)
+  echo 'AI review failed, see run https://git.example/o/r/actions/runs/5' > "$t"
+  assert_hidden_cost_line 'AI review failed, see run https://git.example/o/r/actions/runs/5' \
+    "$(COST_FILE=$(cost_file) posted_body comment 6 "$t")"
+}
+
+test_post_without_cost_record_leaves_the_payload() {
+  local p
+  p=$(fixture review_payload.json)
+  assert_json_eq "$(cat "$p")" "$(dry_payload review 6 "$p")"
+  assert_json_eq "$(cat "$p")" "$(COST_FILE=/nonexistent dry_payload review 6 "$p")"
+}
