@@ -101,6 +101,8 @@ jobs:
           BASE_SHA: ${{ steps.gate.outputs.base_sha }}
           HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
           BASE_REF: ${{ steps.gate.outputs.base_ref }}
+          # Audits read the repository context from here, whatever ref they run on.
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           EXCLUDE_PATHS: ${{ inputs.exclude_paths }}
           MAX_DIFF_LINES: ${{ inputs.max_diff_lines }}
           AI_REVIEW_DIR: ${{ github.workspace }}/ai-review

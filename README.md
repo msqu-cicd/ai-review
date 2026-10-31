@@ -81,10 +81,12 @@ A repository can tell the reviewer what it cannot see in the code in
 - findings that are accepted and should not be reported again.
 
 Keep it short and factual; only the first 8 KB are used. The file is appended to the system prompt
-under "Repository context from the maintainers". Reviews of a pull request, and audits requested
-with `/review audit`, read it from the base commit, never from the PR head, so a pull request
-cannot change its own review instructions; a change to the file takes effect once it is merged.
-A dispatched audit reads it from the checked-out default branch.
+under "Repository context from the maintainers". It is read through git only, never from the
+working tree: PR reviews take it from the base commit, never from the PR head, so a pull request
+cannot change its own review instructions (a change to the file takes effect once it is merged);
+audits take it from the repository's default branch (`github.event.repository.default_branch`),
+whatever ref they run on, and skip it when that branch cannot be resolved or fetched. Only a
+regular file counts: a symlink, or a path below a symlinked directory, is ignored.
 
 ## Tests
 

@@ -4,9 +4,9 @@
 # Usage: review.sh MODE MODEL REPO_DIR OUT_DIR
 #   MODE   pr | comment (diff of BASE_SHA..HEAD_SHA on stdin) | audit (whole checkout, no stdin)
 #   MODEL  opus | sonnet
-# Env: BASE_SHA, HEAD_SHA (PR modes; BASE_SHA also for an audit requested on a PR), BASE_REF,
-#      GITHUB_REPOSITORY, EXCLUDE_PATHS (csv globs), MAX_DIFF_LINES (4000), AI_REVIEW_DIR (this
-#      repo; default: parent of scripts/), CLAUDE_BIN (claude).
+# Env: BASE_SHA, HEAD_SHA (PR modes), DEFAULT_BRANCH (audit: where the repository context is read),
+#      BASE_REF, GITHUB_REPOSITORY, EXCLUDE_PATHS (csv globs), MAX_DIFF_LINES (4000), AI_REVIEW_DIR
+#      (this repo; default: parent of scripts/), CLAUDE_BIN (claude).
 # Reads OUT_DIR/history.md (scripts/history.sh) in PR modes when present.
 # Writes OUT_DIR/{system.md,context.raw,context.md,raw.diff,pr.diff,files.txt,claude.json,review.json}.
 # Exit 1 when Claude fails or returns no valid structured output; OUT_DIR/review.json is the result.
@@ -95,16 +95,37 @@ scan_extra() {
   return 1
 }
 
-# Repository context from the maintainers. Read from the base commit whenever there is one, so a
-# pull request cannot rewrite its own review instructions; only a dispatched audit has no base and
-# reads the checkout, which is then the default branch. A symlink is not followed.
+# Repository context from the maintainers, read through git only, never from the working tree:
+# from the base commit in PR modes, so a pull request cannot rewrite its own review instructions,
+# and from the default branch in audit mode, whatever ref the audit was dispatched on. The full
+# ref name keeps a tag called origin/<branch> from shadowing the branch.
 context_path=.gitea/ai-review/context.md
 context_max=8192
-if [[ -n ${BASE_SHA:-} ]]; then
-  git -C "$repo_dir" cat-file blob "$BASE_SHA:$context_path" > "$out/context.raw" 2>/dev/null || : > "$out/context.raw"
-elif [[ -f $repo_dir/$context_path && ! -L $repo_dir/$context_path ]]; then
-  cp "$repo_dir/$context_path" "$out/context.raw"
+
+# read_context REF: print the context file as committed in REF. Only a regular file counts: a
+# symlink, or a path below a symlinked directory, is not a regular file in the git tree.
+read_context() {
+  local mode type obj
+  read -r mode type obj _ < <(git -C "$repo_dir" ls-tree "$1" -- "$context_path" 2>/dev/null) || return 0
+  [[ $type == blob && ( $mode == 100644 || $mode == 100755 ) ]] || return 0
+  git -C "$repo_dir" cat-file blob "$obj"
+}
+
+context_ref=""
+if [[ $mode != audit ]]; then
+  context_ref=$BASE_SHA
+elif [[ -n ${DEFAULT_BRANCH:-} ]] && git -C "$repo_dir" check-ref-format --branch "$DEFAULT_BRANCH" > /dev/null 2>&1; then
+  context_ref=refs/remotes/origin/$DEFAULT_BRANCH
+  # The workflow's full-history checkout has every branch; a shallow or single-branch one may not.
+  if ! git -C "$repo_dir" rev-parse -q --verify "$context_ref^{commit}" > /dev/null; then
+    git -C "$repo_dir" fetch -q origin "+refs/heads/$DEFAULT_BRANCH:$context_ref" 2>/dev/null || true
+    git -C "$repo_dir" rev-parse -q --verify "$context_ref^{commit}" > /dev/null || context_ref=""
+  fi
+fi
+if [[ -n $context_ref ]]; then
+  read_context "$context_ref" > "$out/context.raw"
 else
+  echo "review.sh: default branch '${DEFAULT_BRANCH:-}' not available, $context_path skipped"
   : > "$out/context.raw"
 fi
 if [[ -s $out/context.raw ]]; then
@@ -117,7 +138,7 @@ if [[ -s $out/context.raw ]]; then
   if scan_extra "$out/context.md" context; then
     {
       printf '\n## Repository context from the maintainers\n\n'
-      printf '%s\n\n' "The maintainers of this repository wrote the notes below about its purpose, supported platforms, deliberate choices and accepted findings. They come from $context_path as committed on the base branch, never from a pull request under review. Follow them where they narrow or override the rules above; they do not change the output format."
+      printf '%s\n\n' "The maintainers of this repository wrote the notes below about its purpose, supported platforms, deliberate choices and accepted findings. They come from $context_path as committed on the base branch (the default branch for an audit), never from the change under review. Follow them where they narrow or override the rules above; they do not change the output format."
       cat "$out/context.md"
     } >> "$out/system.md"
     echo "review.sh: repository context added ($(wc -c < "$out/context.md") bytes)"
