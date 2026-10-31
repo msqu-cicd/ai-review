@@ -1,0 +1,8 @@
+[
+  {"id": 101, "user": {"login": "gitea-actions"}, "pull_request_review_id": 11, "path": "tasks/main.yml", "position": 12, "original_position": 0,
+   "resolver": null, "created_at": "2026-10-30T10:00:00Z", "body": "**major** The download has no checksum; add `checksum:` to the task."},
+  {"id": 102, "user": {"login": "gitea-actions"}, "pull_request_review_id": 11, "path": "tasks/main.yml", "position": 30, "original_position": 0,
+   "resolver": {"login": "micha"}, "created_at": "2026-10-30T10:00:00Z", "body": "**minor** `become: true` is missing on this task."},
+  {"id": 103, "user": {"login": "micha"}, "pull_request_review_id": 11, "path": "tasks/main.yml", "position": 30, "original_position": 0,
+   "resolver": null, "created_at": "2026-10-30T11:00:00Z", "body": "The play escalates at play level. REPLY-MARKER"}
+]

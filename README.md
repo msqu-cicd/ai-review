@@ -50,13 +50,22 @@ The secret `CLAUDE_CODE_OAUTH_TOKEN` must be passed by the caller (an org secret
    gitleaks always uses `scripts/gitleaks.toml` (its built-in rules) and ignores `gitleaks:allow`
    comments; the checkout's `.gitleaksignore` is deleted first. Nothing in the PR head can switch
    the gate off; to keep files away from the model, list them in `exclude_paths`.
-3. One `claude -p` in restricted mode with read-only tools over the diff (or the checkout for
+3. In PR modes, `scripts/history.sh` reads the earlier discussion on the PR with the job token
+   into `out/history.md`: earlier AI reviews (body, inline comments and the replies under them)
+   and every other comment or review by a person, oldest first, quoted, about 32 KB at most
+   (older entries are dropped first). AI reviews are recognised by their author (`gitea-actions`,
+   the job token's user) and heading; pending and dismissed reviews, bare `/review` commands and
+   failure notices are left out. A failed fetch only means a review without history.
+4. One `claude -p` in restricted mode with read-only tools over the diff (or the checkout for
    audits), structured JSON output. The system prompt is the mode prompt, `prompts/ansible-role.md`
    for Ansible repositories (conventions plus environment facts and accepted decisions: Debian 13
    servers, ansible-core 2.20, private repositories, play-level `become`), and the repository
-   context (below). The context file goes through gitleaks like the diff; on a hit it is left out
-   and the review runs without it.
-4. Posts a PR review with inline comments (never an approval or a formal rejection), or an issue
+   context (below). In PR modes the task carries the history, fenced as untrusted data: the model
+   verifies each earlier finding against the current diff and does not repeat findings a
+   maintainer has answered unless the code still has the problem. The review step never sees the
+   job token. The context file and the history go through gitleaks like the diff; on a hit they
+   are left out and the review runs without them.
+5. Posts a PR review with inline comments (never an approval or a formal rejection), or an issue
    labelled `ai-audit` for audits. The review body starts with **Changes requested** exactly when
    at least one finding is a blocker or major; the prompts keep problems that only affect an
    unsupported platform at nit. A failed run leaves one comment pointing at the run log.

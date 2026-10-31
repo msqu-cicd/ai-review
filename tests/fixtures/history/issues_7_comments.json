@@ -1,0 +1,7 @@
+[
+  {"id": 201, "user": {"login": "gitea-actions"}, "created_at": "2026-10-30T09:00:00Z", "body": "## AI review (opus)\n\nPosted as a fallback comment. FALLBACK-MARKER"},
+  {"id": 202, "user": {"login": "micha"}, "created_at": "2026-10-30T09:59:00Z", "body": "/review"},
+  {"id": 203, "user": {"login": "gitea-actions"}, "created_at": "2026-10-30T09:59:30Z", "body": "AI review failed, see run https://git.example/o/r/actions/runs/1"},
+  {"id": 204, "user": {"login": "micha"}, "created_at": "2026-10-30T13:00:00Z", "body": "The checksum comes from the release file, see defaults.\r\nCOMMENT-MARKER"},
+  {"id": 205, "user": {"login": "micha"}, "created_at": "2026-10-31T08:59:00Z", "body": "/review sonnet\r\n"}
+]

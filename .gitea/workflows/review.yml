@@ -86,6 +86,14 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: ai-review/scripts/secret-scan.sh tree repo "${{ inputs.exclude_paths }}" out
 
+      # Earlier AI reviews and replies on the PR, read with the job token here because the review
+      # step must not see it. Without them the review still runs, so nothing here fails the job.
+      - name: Collect the earlier discussion
+        if: steps.gate.outputs.run == 'true' && steps.gate.outputs.mode != 'audit'
+        env:
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+        run: ai-review/scripts/history.sh "$PR_NUMBER" out/history.md || echo "history.sh failed, reviewing without history"
+
       - name: Review
         if: steps.gate.outputs.run == 'true'
         env:

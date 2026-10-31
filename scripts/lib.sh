@@ -292,3 +292,74 @@ build_issue_payload() {
       }
   ' "$review"
 }
+
+# --- pull request history ------------------------------------------------------------
+
+# render_history REVIEWS_JSON INLINE_JSON COMMENTS_JSON BOT_LOGIN MAX_BYTES: the earlier
+# discussion on a pull request as Markdown, oldest first, from the Gitea lists of reviews,
+# their inline comments and the issue comments. AI reviews are what BOT_LOGIN posted under the
+# "## AI review" heading (as a review or, after a fallback, as a comment); its other comments
+# (failure notices), bare /review commands, and pending or dismissed reviews are left out.
+# Replies under an inline comment stay with it. Texts are quoted, an entry is cut at MAX_BYTES/4
+# characters, and the oldest entries are dropped, with a one-line note, until the rest fits into
+# MAX_BYTES (the newest one always stays). Prints nothing when there is no discussion.
+render_history() {
+  jq -n -r --slurpfile reviews "$1" --slurpfile inline "$2" --slurpfile comments "$3" \
+    --arg bot "$4" --argjson max "$5" '
+    def quote: split("\r") | join("") | split("\n") | map("> " + .) | join("\n");
+    def cut($n): if length > $n then .[:$n] + "\n[cut: longer than \($n) characters]" else . end;
+    def who: .user.login // "ghost";
+    def by_ai: who == $bot and ((.body // "") | startswith("## AI review"));
+    def where: .path + (if (.position // 0) > 0 then ":" + (.position | tostring)
+                        elif (.original_position // 0) > 0 then " (old line " + (.original_position | tostring) + ")"
+                        else "" end);
+    # one thread: the inline comments on the same line, oldest first
+    def thread:
+      (map(.resolver.login // empty) | first) as $resolver
+      | "On " + (.[0] | where) + (if $resolver then " (resolved by " + $resolver + ")" else "" end) + ":\n"
+        + (map((if who == $bot then "" else who + ", " + .created_at + ":\n" end) + ((.body // "") | quote))
+           | join("\n"));
+    ($inline[0] // []) as $inline
+    | def threads($id):
+        [$inline[] | select(.pull_request_review_id == $id)] | sort_by(.id)
+        | group_by([.path, (.position // 0), (.original_position // 0)]) | sort_by(.[0].id)
+        | map(thread) | join("\n\n");
+      [ ($reviews[0] // [])[]
+        | select(.state != "PENDING" and .state != "REQUEST_REVIEW" and (.dismissed | not))
+        | (.body // "") as $body
+        | threads(.id) as $threads
+        | if by_ai then
+            {t: .submitted_at,
+             text: ("### Earlier AI review of commit " + ((.commit_id // "")[:7]) + ", " + .submitted_at
+                    + "\n\n" + ($body | quote)
+                    + (if $threads != "" then "\n\nInline comments:\n\n" + $threads else "" end))}
+          elif who == $bot or ($body == "" and $threads == "") then empty
+          else
+            {t: .submitted_at,
+             text: ("### Review by " + who
+                    + (if .state == "APPROVED" then " (approved)"
+                       elif .state == "REQUEST_CHANGES" then " (changes requested)" else "" end)
+                    + ", " + .submitted_at
+                    + (if $body != "" then "\n\n" + ($body | quote) else "" end)
+                    + (if $threads != "" then "\n\n" + $threads else "" end))}
+          end ]
+      + [ ($comments[0] // [])[]
+          | (.body // "") as $body
+          | if by_ai then
+              {t: .created_at, text: ("### Earlier AI review, posted as a comment, " + .created_at + "\n\n" + ($body | quote))}
+            elif who == $bot or $body == "" or ($body | test("\\A\\s*/review( +(opus|sonnet|audit))*\\s*\\z")) then empty
+            else
+              {t: .created_at, text: ("### Comment by " + who + ", " + .created_at + "\n\n" + ($body | quote))}
+            end ]
+    | sort_by(.t) | map(.text | cut($max / 4 | floor)) as $all
+    | (reduce ($all | reverse | .[]) as $e ({kept: [], bytes: 0, full: false};
+        if .full then .
+        elif (.kept | length) > 0 and .bytes + ($e | utf8bytelength) + 2 > $max then .full = true
+        else .kept = [$e] + .kept | .bytes += ($e | utf8bytelength) + 2 end)).kept as $kept
+    | (($all | length) - ($kept | length)) as $omitted
+    | if ($kept | length) == 0 then empty
+      else (if $omitted > 0 then "(" + ($omitted | tostring) + " older entries left out to keep this short.)\n\n" else "" end)
+           + ($kept | join("\n\n"))
+      end
+  '
+}
