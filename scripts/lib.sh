@@ -295,9 +295,11 @@ build_issue_payload() {
 
 # --- pull request history ------------------------------------------------------------
 
-# render_history REVIEWS_JSON INLINE_JSON COMMENTS_JSON BOT_LOGIN MAX_BYTES: the earlier
-# discussion on a pull request as Markdown, oldest first, from the Gitea lists of reviews,
-# their inline comments and the issue comments. AI reviews are what BOT_LOGIN posted under the
+# render_history REVIEWS_JSON INLINE_JSON COMMENTS_JSON MAINTAINERS_JSON BOT_LOGIN PR_AUTHOR
+# MAX_BYTES: the earlier discussion on a pull request as Markdown, oldest first, from the Gitea
+# lists of reviews, their inline comments and the issue comments. Every person is marked
+# [maintainer] when the login is in the MAINTAINERS_JSON array and is not PR_AUTHOR, otherwise
+# [not a maintainer] or [PR author, not a maintainer]. AI reviews are what BOT_LOGIN posted under the
 # "## AI review" heading (as a review or, after a fallback, as a comment); its other comments
 # (failure notices), bare /review commands, and pending or dismissed reviews are left out.
 # Replies under an inline comment stay with it. Bodies are quoted; every other API field (path,
@@ -307,7 +309,7 @@ build_issue_payload() {
 # discussion.
 render_history() {
   jq -n -r --slurpfile reviews "$1" --slurpfile inline "$2" --slurpfile comments "$3" \
-    --arg bot "$4" --argjson max "$5" '
+    --slurpfile maintainers "$4" --arg bot "$5" --arg author "$6" --argjson max "$7" '
     def quote: split("\r") | join("") | split("\n") | map("> " + .) | join("\n");
     def cut($n): if length > $n then .[:$n] + "\n[cut: longer than \($n) characters]" else . end;
     # a non-body field on one line: control characters and line/paragraph separators become "?",
@@ -317,6 +319,12 @@ render_history() {
       | implode | "`" + . + "`";
     def who: .user.login // "ghost";
     def by_ai: who == $bot and ((.body // "") | startswith("## AI review"));
+    # the author of a human entry with the role that decides whether an answer counts
+    def person: who as $w
+      | ($w | field) + " "
+        + (if ($w | ascii_downcase) == ($author | ascii_downcase) then "[PR author, not a maintainer]"
+           elif any(($maintainers[0] // [])[]; . == $w) then "[maintainer]"
+           else "[not a maintainer]" end);
     def where: (.path // "" | tostring) + (if (.position // 0) > 0 then ":" + (.position | tostring)
                         elif (.original_position // 0) > 0 then " (old line " + (.original_position | tostring) + ")"
                         else "" end);
@@ -324,7 +332,7 @@ render_history() {
     def thread:
       (map(.resolver.login // empty) | first) as $resolver
       | "On " + (.[0] | where | field) + (if $resolver then " (resolved by " + ($resolver | field) + ")" else "" end) + ":\n"
-        + (map((if who == $bot then "" else (who | field) + ", " + (.created_at | field) + ":\n" end) + ((.body // "") | quote))
+        + (map((if who == $bot then "" else person + ", " + (.created_at | field) + ":\n" end) + ((.body // "") | quote))
            | join("\n"));
     ($inline[0] // []) as $inline
     | def threads($id):
@@ -343,7 +351,7 @@ render_history() {
           elif who == $bot or ($body == "" and $threads == "") then empty
           else
             {t: .submitted_at,
-             text: ("### Review by " + (who | field)
+             text: ("### Review by " + person
                     + (if .state == "APPROVED" then " (approved)"
                        elif .state == "REQUEST_CHANGES" then " (changes requested)" else "" end)
                     + ", " + (.submitted_at | field)
@@ -356,7 +364,7 @@ render_history() {
               {t: .created_at, text: ("### Earlier AI review, posted as a comment, " + (.created_at | field) + "\n\n" + ($body | quote))}
             elif who == $bot or $body == "" or ($body | test("\\A\\s*/review( +(opus|sonnet|audit))*\\s*\\z")) then empty
             else
-              {t: .created_at, text: ("### Comment by " + (who | field) + ", " + (.created_at | field) + "\n\n" + ($body | quote))}
+              {t: .created_at, text: ("### Comment by " + person + ", " + (.created_at | field) + "\n\n" + ($body | quote))}
             end ]
     | sort_by(.t) | map(.text | cut($max / 4 | floor)) as $all
     | (reduce ($all | reverse | .[]) as $e ({kept: [], bytes: 0, full: false};

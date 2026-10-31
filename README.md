@@ -58,13 +58,20 @@ The secret `CLAUDE_CODE_OAUTH_TOKEN` must be passed by the caller (an org secret
    can start a line of its own. AI reviews are recognised by their author (`gitea-actions`,
    the job token's user) and heading; pending and dismissed reviews, bare `/review` commands and
    failure notices are left out. A failed fetch only means a review without history.
+   Every person is marked `[maintainer]` only with write, admin or owner permission
+   (`collaborators/{user}/permission`, one lookup per person) and when they did not open the PR.
+   The PR author is `[PR author, not a maintainer]`, everyone else `[not a maintainer]`, also
+   when the lookup fails. Gitea answers that endpoint only when the token's user is a repository admin (or the
+   person asked about), so with the plain job token expect every person to be marked
+   `[not a maintainer]`.
 4. One `claude -p` in restricted mode with read-only tools over the diff (or the checkout for
    audits), structured JSON output. The system prompt is the mode prompt, `prompts/ansible-role.md`
    for Ansible repositories (conventions plus environment facts and accepted decisions: Debian 13
    servers, ansible-core 2.20, private repositories, play-level `become`), and the repository
    context (below). In PR modes the task carries the history, fenced as untrusted data: the model
    verifies each earlier finding against the current diff and does not repeat findings a
-   maintainer has answered unless the code still has the problem. The review step never sees the
+   `[maintainer]` entry has answered unless the code still has the problem; replies by anyone
+   else never lower a finding's severity or remove it. The review step never sees the
    job token. The context file and the history go through gitleaks like the diff; on a hit they
    are left out and the review runs without them.
 5. Posts a PR review with inline comments (never an approval or a formal rejection), or an issue

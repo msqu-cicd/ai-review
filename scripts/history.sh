@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Collect the earlier discussion on a pull request for a re-review: the AI reviews posted
 # before (body, inline comments and the replies under them) and what people wrote, oldest
-# first. Runs in its own workflow step because the review step has no Gitea token.
+# first, each person marked as maintainer or not. Runs in its own workflow step because the
+# review step has no Gitea token.
 #
 # Usage: history.sh PR_NUMBER OUT_FILE
 # Env: GITEA_TOKEN, GITHUB_API_URL, GITHUB_REPOSITORY (as for post.sh); BOT_LOGIN (gitea-actions,
@@ -33,17 +34,21 @@ skip() { echo "history.sh: $1; the review runs without history" >&2; exit 0; }
   || skip "GITEA_TOKEN, GITHUB_API_URL and GITHUB_REPOSITORY are required"
 base="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
 
-# get PATH FILE: GET repos/REPO/PATH into FILE; non-zero on any failure, including a body that
-# is not a JSON array.
+# get PATH FILE [TYPE]: GET repos/REPO/PATH into FILE; non-zero on any failure, including a body
+# whose JSON type is not TYPE (array).
 get() {
   "$CURL_BIN" -fsS --retry 2 --max-time 30 -H "Authorization: token $GITEA_TOKEN" -o "$2" "$base/$1" \
-    && jq -e 'type == "array"' "$2" > /dev/null 2>&1
+    && jq -e --arg t "${3:-array}" 'type == $t' "$2" > /dev/null 2>&1
 }
 
 # append FILE: add the array in FILE to the array in $work/acc.json.
 append() {
   jq -s 'add' "$work/acc.json" "$1" > "$work/acc.next" && mv "$work/acc.next" "$work/acc.json"
 }
+
+get "pulls/$pr" "$work/pr.json" object || skip "could not read PR $pr"
+author=$(jq -r '.user.login // ""' "$work/pr.json")
+[[ -n $author ]] || skip "PR $pr has no author"
 
 # Reviews come in pages; read until an empty page, at most 20 pages of 50.
 echo '[]' > "$work/acc.json"
@@ -64,8 +69,26 @@ mv "$work/acc.json" "$work/inline.json"
 
 get "issues/$pr/comments" "$work/comments.json" || skip "could not list the comments of PR $pr"
 
-render_history "$work/reviews.json" "$work/inline.json" "$work/comments.json" "$BOT_LOGIN" "$HISTORY_MAX_BYTES" \
-  > "$work/history.md" || skip "could not render the discussion"
+# Maintainers: people with write access who did not open the PR; only their answers may settle
+# a finding. One permission lookup per person. Gitea answers it only when the token's user is a
+# repository admin (or the person asked about); any failure counts as "not a maintainer".
+echo '[]' > "$work/maintainers.json"
+while read -r login; do
+  if [[ $login =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
+    && get "collaborators/$login/permission" "$work/perm.json" object \
+    && jq -e '.permission | IN("write", "admin", "owner")' "$work/perm.json" > /dev/null 2>&1; then
+    jq --arg l "$login" '. + [$l]' "$work/maintainers.json" > "$work/acc.next"
+    mv "$work/acc.next" "$work/maintainers.json"
+  else
+    echo "history.sh: $login does not count as a maintainer (no write access or lookup failed)"
+  fi
+done < <(jq -rn --arg bot "$BOT_LOGIN" --arg author "$author" '
+  [inputs | .[] | .user.login // empty] | unique | .[]
+  | select(. != $bot and ascii_downcase != ($author | ascii_downcase))
+' "$work/reviews.json" "$work/inline.json" "$work/comments.json")
+
+render_history "$work/reviews.json" "$work/inline.json" "$work/comments.json" "$work/maintainers.json" \
+  "$BOT_LOGIN" "$author" "$HISTORY_MAX_BYTES" > "$work/history.md" || skip "could not render the discussion"
 if [[ -s $work/history.md ]]; then
   mv "$work/history.md" "$out_file"
   echo "history.sh: $(grep -c '^### ' "$out_file") entries, $(wc -c < "$out_file") bytes in $out_file"
