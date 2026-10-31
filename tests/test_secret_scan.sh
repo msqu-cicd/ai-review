@@ -20,6 +20,18 @@ test_removes_excluded_paths() {
   [[ ! -e "$d/group_vars" && -e "$d/keep.yml" ]]
 }
 
+test_removes_nested_globstar_match() {
+  local d
+  d=$(mktemp -d)
+  mkdir -p "$d/group_vars/all" "$d/roles/x/vars"
+  : > "$d/group_vars/all/git.yml"
+  : > "$d/roles/x/vars/git.yml"
+  : > "$d/git.yml"
+  : > "$d/keep.yml"
+  GITLEAKS_BIN=/bin/true scripts/secret-scan.sh tree "$d" '**/git.yml' "$(mktemp -d)"
+  [[ ! -e "$d/group_vars/all/git.yml" && ! -e "$d/roles/x/vars/git.yml" && ! -e "$d/git.yml" && -e "$d/keep.yml" ]]
+}
+
 test_detects_leak_in_diff() {
   [[ -n "${GITLEAKS_TEST:-}" ]] || return 0
   local out

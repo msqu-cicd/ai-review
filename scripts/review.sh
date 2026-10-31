@@ -52,7 +52,9 @@ else
     git -C "$repo_dir" cat-file -e "$sha^{commit}" 2>/dev/null \
       || { echo "review.sh: commit $sha is not available in $repo_dir" >&2; exit 1; }
   done
-  git -C "$repo_dir" diff "$BASE_SHA" "$HEAD_SHA" > "$out/raw.diff"
+  # Three dots: changes since the merge base, so commits that landed on the base branch after
+  # the PR branched never show up as phantom reversals.
+  git -C "$repo_dir" diff "$BASE_SHA...$HEAD_SHA" > "$out/raw.diff"
   filter_diff "$out/raw.diff" "$EXCLUDE_PATHS" > "$out/pr.diff"
   task="Review the pull request diff given on stdin. Repository: $repo_name, base branch: ${BASE_REF:-unknown}."
   if diff_too_large "$out/pr.diff" "$MAX_DIFF_LINES"; then

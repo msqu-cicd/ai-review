@@ -3,10 +3,17 @@
 # never executed. Callers set their own `set -euo pipefail`; this file only defines
 # functions. Needs bash 4+ and jq.
 
+# _csv_items CSV: split a comma-separated list into the array `items` without pathname
+# expansion (an unquoted `$csv` under IFS=, would glob each word against the cwd).
+_csv_items() {
+  IFS=, read -ra items <<<"$1"
+}
+
 # _csv_contains CSV VALUE: exit 0 when VALUE is one of the comma-separated items.
 _csv_contains() {
-  local IFS=, item
-  for item in $1; do
+  local items item
+  _csv_items "$1"
+  for item in "${items[@]}"; do
     [[ $item == "$2" ]] && return 0
   done
   return 1
@@ -19,6 +26,7 @@ parse_review_command() {
   local first mode=comment model=opus word
   local re='^/review(( +(opus|sonnet|audit))*) *$'
   first=${1%%$'\n'*}
+  first=${first%$'\r'} # web forms submit CRLF
   [[ $first =~ $re ]] || return 1
   for word in ${BASH_REMATCH[1]}; do
     case $word in
@@ -94,11 +102,12 @@ gate_decide() {
 # The path of a section is its b/ side.
 
 # _diff_sections DIFF_FILE: one line per section: "INDEX<TAB>PATH<TAB>VAULT" where VAULT is
-# 1 when the section adds a line starting with "$ANSIBLE_VAULT;".
+# 1 when the section carries a "$ANSIBLE_VAULT;" header line (added, removed or context, so
+# new, deleted and re-encrypted vault files all count).
 _diff_sections() {
   awk '
     /^diff --git / { if (n) print n "\t" path "\t" vault; n++; path = $0; sub(/^diff --git a\/.* b\//, "", path); vault = 0; next }
-    /^\+\$ANSIBLE_VAULT;/ { vault = 1 }
+    /^[ +-]\$ANSIBLE_VAULT;/ { vault = 1 }
     END { if (n) print n "\t" path "\t" vault }
   ' "$1"
 }
@@ -111,10 +120,12 @@ _is_lockfile() {
   return 1
 }
 
-# _glob_matches PATH GLOBS_CSV: exit 0 when PATH matches one of the comma-separated globs.
+# _glob_matches PATH GLOBS_CSV: exit 0 when PATH matches one of the comma-separated globs
+# (bash pattern matching; `*` and `**` both cross `/` here).
 _glob_matches() {
-  local IFS=, glob
-  for glob in $2; do
+  local items glob
+  _csv_items "$2"
+  for glob in "${items[@]}"; do
     # shellcheck disable=SC2053
     [[ -n $glob && $1 == $glob ]] && return 0
   done

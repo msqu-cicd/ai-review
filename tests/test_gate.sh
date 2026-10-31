@@ -13,6 +13,10 @@ test_parse_sonnet_audit() {
   assert_eq "audit sonnet" "$(parse_review_command '/review sonnet audit')"
 }
 
+test_parse_crlf_first_line() { # web forms submit CRLF; only the first line counts
+  assert_eq "comment opus" "$(parse_review_command $'/review\r\nsome notes')"
+}
+
 test_parse_rejects_prose() {
   assert_exit 1 parse_review_command 'please /review this'
 }

@@ -22,10 +22,16 @@ mode=$1 target=$2 globs=$3 out=$4
 [[ $mode == diff || $mode == tree ]] || usage
 mkdir -p "$out"
 
+# split_csv CSV: fill the array `globs` without pathname expansion.
+split_csv() {
+  IFS=, read -ra globs <<<"$1"
+}
+
 # validate_globs CSV: refuse anything that could reach outside the checkout.
 validate_globs() {
-  local IFS=, glob
-  for glob in $1; do
+  local globs glob
+  split_csv "$1"
+  for glob in "${globs[@]}"; do
     [[ -z $glob ]] && continue
     if [[ $glob == /* || $glob == *..* ]]; then
       echo "secret-scan.sh: refusing exclude path '$glob' (absolute or contains ..)" >&2
@@ -34,24 +40,23 @@ validate_globs() {
   done
 }
 
-# remove_excluded DIR CSV: delete matching paths inside DIR, then prune directories left
-# empty by that (never inside .git).
+# remove_excluded DIR CSV: delete the paths each glob expands to inside DIR (globstar, so
+# `**/x` reaches every depth), then prune directories left empty by that (never inside .git).
 remove_excluded() {
   local dir=$1 csv=$2
   (
     cd "$dir"
     shopt -s nullglob globstar dotglob
-    local IFS=, glob
-    for glob in $csv; do
+    local globs glob path
+    split_csv "$csv"
+    for glob in "${globs[@]}"; do
       [[ -z $glob ]] && continue
-      IFS=' '
       # shellcheck disable=SC2086
       for path in $glob; do
         [[ $path == .git || $path == .git/* ]] && continue
         rm -rf -- "$path"
         echo "secret-scan.sh: removed excluded path $path"
       done
-      IFS=,
     done
   )
   find "$dir" -mindepth 1 -type d -empty -not -path "$dir/.git" -not -path "$dir/.git/*" -delete

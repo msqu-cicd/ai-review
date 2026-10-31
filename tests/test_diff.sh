@@ -17,6 +17,18 @@ test_filter_keeps_binary_marker() {
   filter_diff "$(fixture sample.diff)" '' | grep -q 'Binary files a/logo.png and b/logo.png differ'
 }
 
+test_filter_drops_modified_vault() { # re-encrypted vault: header is a context line, not an added one
+  assert_eq "" "$(filter_diff "$(fixture vault-modified.diff)" '' | grep '^diff --git' || true)"
+}
+
+test_glob_matches_ignores_cwd_files() { # patterns must not be pathname-expanded in the caller's cwd
+  local d
+  d=$(mktemp -d)
+  mkdir -p "$d/tasks"
+  : > "$d/tasks/x"
+  (cd "$d" && _glob_matches tasks/main.yml 'tasks/*')
+}
+
 test_filter_exit_zero_on_empty() {
   local empty
   empty=$(mktemp)

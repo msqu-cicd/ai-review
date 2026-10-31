@@ -44,11 +44,15 @@ if [[ $run == true ]]; then
   elif [[ $event == issue_comment ]]; then
     user=$(jq -r '.comment.user.login // ""' "$file")
     if [[ -z ${AI_REVIEW_DRY_RUN:-} ]]; then
-      perm=$(gitea_get "collaborators/$user/permission" | jq -r '.permission // ""' || true)
-      case $perm in
-        write | admin | owner) ;;
-        *) deny "commenter $user lacks write access (${perm:-unknown})" ;;
-      esac
+      # Users with write access are the repo's assignees; the endpoint needs only read access,
+      # which the job token has. An API failure must not look like a deny: it fails the job.
+      if ! assignees=$(gitea_get assignees); then
+        echo "gate.sh: could not list assignees of $repo to check $user's write access" >&2
+        exit 1
+      fi
+      if ! jq -e --arg u "$user" 'map(.login) | index($u) != null' <<<"$assignees" > /dev/null; then
+        deny "commenter $user lacks write access"
+      fi
       if [[ $run == true ]]; then
         prjson=$(gitea_get "pulls/$pr")
         head_repo=$(jq -r '.head.repo.full_name // ""' <<<"$prjson")

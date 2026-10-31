@@ -65,6 +65,25 @@ test_review_writes_review_json() {
   assert_eq request_changes "$(jq -r .verdict "$d/review.json")"
 }
 
+test_review_diff_excludes_base_only_changes() { # merge-base diff: commits on main after branching are not PR changes
+  local r d
+  r=$(two_commit_repo)
+  d=$(mktemp -d)
+  git -C "$r" checkout -q -b feature
+  echo "f: 1" > "$r/feature.yml"
+  git -C "$r" add -A
+  git -C "$r" -c user.name=t -c user.email=t@t commit -qm feature
+  git -C "$r" checkout -q -
+  echo "m: 1" > "$r/on_main.yml"
+  git -C "$r" add -A
+  git -C "$r" -c user.name=t -c user.email=t@t commit -qm "on main"
+  CLAUDE_BIN="$REPO_ROOT/tests/fake_claude.sh" FAKE_CLAUDE_OUTPUT="$(fixture claude_ok.json)" \
+    BASE_SHA=$(git -C "$r" rev-parse HEAD) HEAD_SHA=$(git -C "$r" rev-parse feature) AI_REVIEW_DIR="$REPO_ROOT" \
+    scripts/review.sh pr opus "$r" "$d" > /dev/null
+  grep -q 'feature.yml' "$d/raw.diff"
+  ! grep -q 'on_main.yml' "$d/raw.diff"
+}
+
 test_review_accepts_relative_out_dir() { # the workflow passes "repo" and "out" relative to the workspace
   local r w
   r=$(two_commit_repo)

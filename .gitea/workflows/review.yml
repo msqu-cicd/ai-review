@@ -98,7 +98,8 @@ jobs:
           AI_REVIEW_DIR: ${{ github.workspace }}/ai-review
         run: |
           claude --version
-          ai-review/scripts/review.sh "${{ steps.gate.outputs.mode }}" "${{ steps.gate.outputs.model }}" repo out
+          # The model's process must not see the job token (it is only needed to post).
+          env -u GITEA_TOKEN ai-review/scripts/review.sh "${{ steps.gate.outputs.mode }}" "${{ steps.gate.outputs.model }}" repo out
 
       - name: Post the result
         if: steps.gate.outputs.run == 'true'
