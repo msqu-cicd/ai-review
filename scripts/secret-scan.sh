@@ -92,6 +92,8 @@ validate_globs "$globs"
 if [[ $mode == tree ]]; then
   [[ -d $target ]] || { echo "secret-scan.sh: $target is not a directory" >&2; exit 2; }
   remove_excluded "$target" "$globs"
+  # gitleaks also reads .gitleaksignore from the scanned directory, i.e. the PR head
+  rm -f -- "$target/.gitleaksignore"
 else
   [[ -f $target ]] || { echo "secret-scan.sh: $target is not a file" >&2; exit 2; }
 fi
@@ -100,11 +102,16 @@ gitleaks=${GITLEAKS_BIN:-$(install_gitleaks "$out")}
 report="$out/gitleaks.json"
 rm -f "$report"
 
+# The checkout is the PR head and must not switch the gate off: our own config instead of its
+# .gitleaks.toml, and no gitleaks:allow comments
+flags=(--no-banner --redact --exit-code 1 --report-format json --report-path "$report"
+  --config "$(dirname "${BASH_SOURCE[0]}")/gitleaks.toml" --ignore-gitleaks-allow)
+
 rc=0
 if [[ $mode == diff ]]; then
-  "$gitleaks" stdin --no-banner --redact --exit-code 1 --report-format json --report-path "$report" < "$target" || rc=$?
+  "$gitleaks" stdin "${flags[@]}" < "$target" || rc=$?
 else
-  "$gitleaks" dir "$target" --no-banner --redact --exit-code 1 --report-format json --report-path "$report" || rc=$?
+  "$gitleaks" dir "$target" "${flags[@]}" || rc=$?
 fi
 
 case $rc in

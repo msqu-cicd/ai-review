@@ -34,6 +34,37 @@ test_filter_dropped_reports_excluded_glob() {
   assert_eq $'tasks/main.yml\texcluded' "$(filter_diff_dropped "$(fixture sample.diff)" 'tasks/*' | head -1)"
 }
 
+# secret-scan.sh deletes a directory with everything below it; the diff filter must drop the
+# same files, or a PR that changes one sends it to the model
+test_filter_dropped_reports_excluded_directory() {
+  assert_eq $'tasks/main.yml\texcluded' "$(filter_diff_dropped "$(fixture sample.diff)" 'tasks' | head -1)"
+}
+
+test_glob_matches_no_partial_directory_name() {
+  ! _glob_matches tasks-extra/main.yml 'tasks'
+}
+
+# Every file secret-scan.sh deletes from the checkout must also be dropped from the diff;
+# globstar `**/` matches zero directories there, and `./` or a trailing `/` still expand.
+test_glob_matches_every_file_the_tree_removal_deletes() {
+  local d before after globs='**/git.yml,roles/**/vars,./group_vars/*,host_vars/' path
+  d=$(mktemp -d)
+  mkdir -p "$d/roles/x/vars" "$d/roles/vars" "$d/sub" "$d/group_vars" "$d/host_vars/h"
+  for path in git.yml sub/git.yml roles/vars/main.yml roles/x/vars/main.yml \
+    group_vars/all.yml host_vars/h/main.yml keep.yml; do
+    : > "$d/$path"
+  done
+  before=$(cd "$d" && find . -type f | sed 's|^\./||' | sort)
+  GITLEAKS_BIN=/bin/true scripts/secret-scan.sh tree "$d" "$globs" "$(mktemp -d)" >/dev/null
+  after=$(cd "$d" && find . -type f | sed 's|^\./||' | sort)
+  assert_eq keep.yml "$after" "tree removal"
+  while read -r path; do
+    [[ $path == keep.yml ]] && continue
+    _glob_matches "$path" "$globs" || { echo "deleted from the tree but sent in the diff: $path" >&2; return 1; }
+  done <<<"$before"
+  ! _glob_matches keep.yml "$globs"
+}
+
 test_glob_matches_ignores_cwd_files() { # patterns must not be pathname-expanded in the caller's cwd
   local d
   d=$(mktemp -d)

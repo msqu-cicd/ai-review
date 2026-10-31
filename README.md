@@ -33,7 +33,7 @@ Only the first line counts and the commenter needs write access to the repositor
 | `mode` | derived from the event | `pr`, `comment` or `audit` |
 | `model` | `opus` | `opus` or `sonnet` |
 | `skip_authors` | `renovate,gitea-actions` | PR authors whose PRs are not reviewed |
-| `exclude_paths` | empty | comma-separated globs deleted from the checkout and dropped from the diff before anything is sent |
+| `exclude_paths` | empty | comma-separated globs deleted from the checkout and dropped from the diff before anything is sent; a directory covers everything below it |
 | `max_diff_lines` | `4000` | above this the model gets the list of changed files instead of the diff |
 | `ai_review_ref` | `main` | ref of this repository to run |
 
@@ -47,6 +47,9 @@ The secret `CLAUDE_CODE_OAUTH_TOKEN` must be passed by the caller (an org secret
    gitleaks over the tree. Any hit ends the run with a short PR comment and no model call.
    In PR mode `review.sh` also scans the filtered diff it would send (deleted files and removed
    lines are not in the tree), with the same outcome on a hit.
+   gitleaks always uses `scripts/gitleaks.toml` (its built-in rules) and ignores `gitleaks:allow`
+   comments; the checkout's `.gitleaksignore` is deleted first. Nothing in the PR head can switch
+   the gate off; to keep files away from the model, list them in `exclude_paths`.
 3. One `claude -p` in restricted mode with read-only tools over the diff (or the checkout for
    audits), structured JSON output.
 4. Posts a PR review with inline comments (never an approval or a formal rejection), or an issue

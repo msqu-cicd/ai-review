@@ -125,13 +125,20 @@ _is_lockfile() {
 }
 
 # _glob_matches PATH GLOBS_CSV: exit 0 when PATH matches one of the comma-separated globs
-# (bash pattern matching; `*` and `**` both cross `/` here).
+# (bash pattern matching; `*` and `**` both cross `/` here) or lies below a directory one of
+# them names. Must drop at least what secret-scan.sh deletes from the checkout, so `./` and a
+# trailing `/` are stripped and `**/` also matches zero directories, as in globstar expansion
+# (`@(...)` works inside [[ ]] without extglob since bash 4.1).
 _glob_matches() {
   local items glob
   _csv_items "$2"
   for glob in "${items[@]}"; do
+    glob=${glob#./}
+    glob=${glob%/}
+    [[ -z $glob ]] && continue
+    glob=${glob//'**/'/'@(*/|)'}
     # shellcheck disable=SC2053
-    [[ -n $glob && $1 == $glob ]] && return 0
+    [[ $1 == $glob || $1 == $glob/* ]] && return 0
   done
   return 1
 }

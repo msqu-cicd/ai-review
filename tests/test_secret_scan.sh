@@ -46,3 +46,54 @@ test_clean_diff_passes() {
   out=$(mktemp -d)
   assert_exit 0 scripts/secret-scan.sh diff "$(fixture sample.diff)" '' "$out"
 }
+
+# leaky_tree: a checkout holding the token file that leaky.diff adds.
+leaky_tree() {
+  local d
+  d=$(mktemp -d)
+  mkdir -p "$d/group_vars/all"
+  sed -n 's/^+\([a-z]\)/\1/p' "$(fixture leaky.diff)" > "$d/group_vars/all/tokens.yml"
+  printf '%s\n' "$d"
+}
+
+# The checkout is the PR head: nothing in it may switch the gate off.
+test_repo_gitleaks_toml_does_not_hide_a_leak() {
+  [[ -n "${GITLEAKS_TEST:-}" ]] || return 0
+  local d
+  d=$(leaky_tree)
+  cat > "$d/.gitleaks.toml" <<'EOF'
+[extend]
+useDefault = true
+
+[allowlist]
+paths = ['''.*''']
+EOF
+  assert_exit 1 scripts/secret-scan.sh tree "$d" '' "$(mktemp -d)"
+}
+
+test_repo_gitleaksignore_does_not_hide_a_leak() {
+  [[ -n "${GITLEAKS_TEST:-}" ]] || return 0
+  local d out
+  d=$(leaky_tree)
+  out=$(mktemp -d)
+  scripts/secret-scan.sh tree "$d" '' "$out" >/dev/null 2>&1 || true
+  jq -r '.[].Fingerprint' "$out/gitleaks.json" > "$d/.gitleaksignore"
+  [[ -s "$d/.gitleaksignore" ]]
+  assert_exit 1 scripts/secret-scan.sh tree "$d" '' "$out"
+}
+
+test_gitleaks_allow_comment_does_not_hide_a_leak_in_the_tree() {
+  [[ -n "${GITLEAKS_TEST:-}" ]] || return 0
+  local d
+  d=$(leaky_tree)
+  sed -i 's/$/ # gitleaks:allow/' "$d/group_vars/all/tokens.yml"
+  assert_exit 1 scripts/secret-scan.sh tree "$d" '' "$(mktemp -d)"
+}
+
+test_gitleaks_allow_comment_does_not_hide_a_leak_in_the_diff() {
+  [[ -n "${GITLEAKS_TEST:-}" ]] || return 0
+  local diff
+  diff=$(mktemp)
+  sed 's/^\(+[a-z].*\)$/\1 # gitleaks:allow/' "$(fixture leaky.diff)" > "$diff"
+  assert_exit 1 scripts/secret-scan.sh diff "$diff" '' "$(mktemp -d)"
+}
