@@ -57,10 +57,16 @@ else
   git -C "$repo_dir" diff "$BASE_SHA...$HEAD_SHA" > "$out/raw.diff"
   filter_diff "$out/raw.diff" "$EXCLUDE_PATHS" > "$out/pr.diff"
   task="Review the pull request diff given on stdin. Repository: $repo_name, base branch: ${BASE_REF:-unknown}."
-  dropped=$(filter_diff_dropped "$out/raw.diff" "$EXCLUDE_PATHS" | paste -sd ',' - | sed 's/,/, /g')
-  if [[ -n $dropped ]]; then
-    task="$task These changed files are hidden from the diff because they are vault files, lockfiles or excluded paths; note that they changed, do not guess their content: $dropped."
-    echo "review.sh: hidden from the diff: $dropped"
+  filter_diff_dropped "$out/raw.diff" "$EXCLUDE_PATHS" > "$out/hidden.tsv"
+  decrypted=$(awk -F'\t' '$2 == "vault-removed" {print $1}' "$out/hidden.tsv" | paste -sd ',' - | sed 's/,/, /g')
+  hidden=$(awk -F'\t' '$2 != "vault-removed" {print $1}' "$out/hidden.tsv" | paste -sd ',' - | sed 's/,/, /g')
+  if [[ -n $decrypted ]]; then
+    task="$task ATTENTION: in these files the Ansible Vault header was removed, so encrypted content was replaced by plaintext or the vault was deleted; the content is hidden from you. Report this as a blocker unless the pull request clearly intends it: $decrypted."
+    echo "review.sh: vault header removed in: $decrypted"
+  fi
+  if [[ -n $hidden ]]; then
+    task="$task These changed files are hidden from the diff because they are vault files, lockfiles or excluded paths; note that they changed, do not guess their content: $hidden."
+    echo "review.sh: hidden from the diff: $hidden"
   fi
   if diff_too_large "$out/pr.diff" "$MAX_DIFF_LINES"; then
     diff_file_list "$out/pr.diff" > "$out/files.txt"

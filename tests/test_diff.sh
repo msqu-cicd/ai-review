@@ -21,12 +21,17 @@ test_filter_drops_modified_vault() { # re-encrypted vault: header is a context l
   assert_eq "" "$(filter_diff "$(fixture vault-modified.diff)" '' | grep '^diff --git' || true)"
 }
 
-test_filter_keeps_vault_turned_plaintext() { # removing the vault header is a change the reviewer must see
-  assert_eq "vars/secrets.yml" "$(filter_diff "$(fixture vault-to-plain.diff)" '' | grep '^diff --git' | sed 's#.* b/##')"
+test_filter_hides_vault_turned_plaintext_but_reports_it() { # plaintext of a former vault never reaches the model, the reviewer is told
+  assert_eq "" "$(filter_diff "$(fixture vault-to-plain.diff)" '' | grep '^diff --git' || true)"
+  assert_eq $'vars/secrets.yml\tvault-removed' "$(filter_diff_dropped "$(fixture vault-to-plain.diff)" '')"
 }
 
-test_filter_dropped_lists_paths() {
-  assert_eq $'vars/secrets.yml\npoetry.lock' "$(filter_diff_dropped "$(fixture sample.diff)" '')"
+test_filter_dropped_lists_paths_with_reasons() {
+  assert_eq $'vars/secrets.yml\tvault\npoetry.lock\tlockfile' "$(filter_diff_dropped "$(fixture sample.diff)" '')"
+}
+
+test_filter_dropped_reports_excluded_glob() {
+  assert_eq $'tasks/main.yml\texcluded' "$(filter_diff_dropped "$(fixture sample.diff)" 'tasks/*' | head -1)"
 }
 
 test_glob_matches_ignores_cwd_files() { # patterns must not be pathname-expanded in the caller's cwd
