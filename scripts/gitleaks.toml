@@ -1,0 +1,4 @@
+# Config for secret-scan.sh, always passed with --config: gitleaks' built-in rules and nothing
+# else. Without it gitleaks reads a .gitleaks.toml from the scanned checkout, i.e. the PR head.
+[extend]
+useDefault = true

@@ -47,6 +47,9 @@ The secret `CLAUDE_CODE_OAUTH_TOKEN` must be passed by the caller (an org secret
    gitleaks over the tree. Any hit ends the run with a short PR comment and no model call.
    In PR mode `review.sh` also scans the filtered diff it would send (deleted files and removed
    lines are not in the tree), with the same outcome on a hit.
+   gitleaks always uses `scripts/gitleaks.toml` (its built-in rules) and ignores `gitleaks:allow`
+   comments; the checkout's `.gitleaksignore` is deleted first. Nothing in the PR head can switch
+   the gate off; to keep files away from the model, list them in `exclude_paths`.
 3. One `claude -p` in restricted mode with read-only tools over the diff (or the checkout for
    audits), structured JSON output.
 4. Posts a PR review with inline comments (never an approval or a formal rejection), or an issue
