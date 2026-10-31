@@ -34,6 +34,16 @@ test_filter_dropped_reports_excluded_glob() {
   assert_eq $'tasks/main.yml\texcluded' "$(filter_diff_dropped "$(fixture sample.diff)" 'tasks/*' | head -1)"
 }
 
+# secret-scan.sh deletes a directory with everything below it; the diff filter must drop the
+# same files, or a PR that changes one sends it to the model
+test_filter_dropped_reports_excluded_directory() {
+  assert_eq $'tasks/main.yml\texcluded' "$(filter_diff_dropped "$(fixture sample.diff)" 'tasks' | head -1)"
+}
+
+test_glob_matches_no_partial_directory_name() {
+  ! _glob_matches tasks-extra/main.yml 'tasks'
+}
+
 test_glob_matches_ignores_cwd_files() { # patterns must not be pathname-expanded in the caller's cwd
   local d
   d=$(mktemp -d)

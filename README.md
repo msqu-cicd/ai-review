@@ -33,7 +33,7 @@ Only the first line counts and the commenter needs write access to the repositor
 | `mode` | derived from the event | `pr`, `comment` or `audit` |
 | `model` | `opus` | `opus` or `sonnet` |
 | `skip_authors` | `renovate,gitea-actions` | PR authors whose PRs are not reviewed |
-| `exclude_paths` | empty | comma-separated globs deleted from the checkout and dropped from the diff before anything is sent |
+| `exclude_paths` | empty | comma-separated globs deleted from the checkout and dropped from the diff before anything is sent; a directory covers everything below it |
 | `max_diff_lines` | `4000` | above this the model gets the list of changed files instead of the diff |
 | `ai_review_ref` | `main` | ref of this repository to run |
 
