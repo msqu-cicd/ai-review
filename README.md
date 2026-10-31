@@ -51,13 +51,31 @@ The secret `CLAUDE_CODE_OAUTH_TOKEN` must be passed by the caller (an org secret
    comments; the checkout's `.gitleaksignore` is deleted first. Nothing in the PR head can switch
    the gate off; to keep files away from the model, list them in `exclude_paths`.
 3. One `claude -p` in restricted mode with read-only tools over the diff (or the checkout for
-   audits), structured JSON output. The system prompt is the mode prompt plus, for Ansible
-   repositories, `prompts/ansible-role.md` (conventions plus environment facts and accepted
-   decisions: Debian 13 servers, ansible-core 2.20, private repositories, play-level `become`).
+   audits), structured JSON output. The system prompt is the mode prompt, `prompts/ansible-role.md`
+   for Ansible repositories (conventions plus environment facts and accepted decisions: Debian 13
+   servers, ansible-core 2.20, private repositories, play-level `become`), and the repository
+   context (below). The context file goes through gitleaks like the diff; on a hit it is left out
+   and the review runs without it.
 4. Posts a PR review with inline comments (never an approval or a formal rejection), or an issue
    labelled `ai-audit` for audits. The review body starts with **Changes requested** exactly when
    at least one finding is a blocker or major; the prompts keep problems that only affect an
    unsupported platform at nit. A failed run leaves one comment pointing at the run log.
+
+### Repository context
+
+A repository can tell the reviewer what it cannot see in the code in
+`.gitea/ai-review/context.md`, for example:
+
+- what the repository is for and who uses it;
+- the supported platforms and versions (and which ones the code deliberately ignores);
+- deliberate choices that look like mistakes, with the reason;
+- findings that are accepted and should not be reported again.
+
+Keep it short and factual; only the first 8 KB are used. The file is appended to the system prompt
+under "Repository context from the maintainers". Reviews of a pull request, and audits requested
+with `/review audit`, read it from the base commit, never from the PR head, so a pull request
+cannot change its own review instructions; a change to the file takes effect once it is merged.
+A dispatched audit reads it from the checked-out default branch.
 
 ## Tests
 

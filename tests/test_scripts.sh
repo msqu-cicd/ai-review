@@ -150,3 +150,77 @@ test_review_passes_restricted_flags() {
   [[ $joined == *"--max-turns 40 "* ]]
   [[ $joined == *"--model opus "* ]]
 }
+
+context_repo() { # BASE_TEXT HEAD_TEXT -> repo whose .gitea/ai-review/context.md holds BASE_TEXT at HEAD~1 and HEAD_TEXT at HEAD; empty means no file
+  local r
+  r=$(mktemp -d)
+  git -C "$r" init -q
+  mkdir -p "$r/.gitea/ai-review"
+  echo "a: 1" > "$r/vars.yml"
+  if [[ -n $1 ]]; then printf '%s\n' "$1" > "$r/.gitea/ai-review/context.md"; fi
+  git -C "$r" add -A
+  git -C "$r" -c user.name=t -c user.email=t@t commit -qm first
+  echo "a: 2" > "$r/vars.yml"
+  if [[ -n $2 ]]; then printf '%s\n' "$2" > "$r/.gitea/ai-review/context.md"; fi
+  git -C "$r" add -A
+  git -C "$r" -c user.name=t -c user.email=t@t commit -qm second
+  printf '%s' "$r"
+}
+
+test_review_adds_context_from_the_base_commit() { # the PR head cannot rewrite its own review instructions
+  local d
+  d=$(mktemp -d)
+  review_fake claude_ok.json pr "$(context_repo BASE-CONTEXT HEAD-CONTEXT)" "$d" > /dev/null
+  grep -q '^## Repository context from the maintainers$' "$d/system.md"
+  grep -q '^BASE-CONTEXT$' "$d/system.md"
+  assert_exit 1 grep -q 'HEAD-CONTEXT' "$d/system.md"
+}
+
+test_review_ignores_context_only_on_the_pr_head() {
+  local d
+  d=$(mktemp -d)
+  review_fake claude_ok.json pr "$(context_repo '' HEAD-CONTEXT)" "$d" > /dev/null
+  assert_exit 1 grep -qE 'HEAD-CONTEXT|Repository context' "$d/system.md"
+}
+
+test_review_cuts_oversize_context() {
+  local d
+  d=$(mktemp -d)
+  review_fake claude_ok.json pr "$(context_repo "$(printf 'x%.0s' {1..9000})TAIL-MARKER" '')" "$d" > /dev/null
+  grep -q '^\[cut: .gitea/ai-review/context.md is longer than 8192 bytes\]$' "$d/system.md"
+  assert_exit 1 grep -q 'TAIL-MARKER' "$d/system.md"
+}
+
+test_review_audit_on_a_pr_reads_context_from_the_base() { # /review audit checks out the PR head
+  local d
+  d=$(mktemp -d)
+  review_fake claude_ok.json audit "$(context_repo BASE-CONTEXT HEAD-CONTEXT)" "$d" > /dev/null
+  grep -q '^BASE-CONTEXT$' "$d/system.md"
+  assert_exit 1 grep -q 'HEAD-CONTEXT' "$d/system.md"
+}
+
+test_review_dispatched_audit_reads_context_from_the_checkout() { # no base: the checkout is the default branch
+  local d r
+  d=$(mktemp -d)
+  r=$(context_repo '' HEAD-CONTEXT)
+  CLAUDE_BIN="$REPO_ROOT/tests/fake_claude.sh" FAKE_CLAUDE_OUTPUT="$(fixture claude_ok.json)" \
+    BASE_SHA='' AI_REVIEW_DIR="$REPO_ROOT" GITLEAKS_BIN=/bin/true \
+    scripts/review.sh audit opus "$r" "$d" > /dev/null
+  grep -q '^HEAD-CONTEXT$' "$d/system.md"
+}
+
+leak_gitleaks() { # -> path of a fake gitleaks that finds a leak when its input holds LEAK-MARKER
+  local g
+  g=$(mktemp)
+  printf '#!/bin/sh\n! grep -q LEAK-MARKER\n' > "$g"
+  chmod +x "$g"
+  printf '%s' "$g"
+}
+
+test_review_leaves_out_context_with_a_secret() { # the review still runs, only without the context
+  local d
+  d=$(mktemp -d)
+  GITLEAKS_BIN=$(leak_gitleaks) review_fake claude_ok.json pr "$(context_repo LEAK-MARKER '')" "$d" > /dev/null
+  [[ -s $d/review.json ]]
+  assert_exit 1 grep -qE 'LEAK-MARKER|Repository context' "$d/system.md"
+}

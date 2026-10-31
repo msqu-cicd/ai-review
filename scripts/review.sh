@@ -4,9 +4,10 @@
 # Usage: review.sh MODE MODEL REPO_DIR OUT_DIR
 #   MODE   pr | comment (diff of BASE_SHA..HEAD_SHA on stdin) | audit (whole checkout, no stdin)
 #   MODEL  opus | sonnet
-# Env: BASE_SHA, HEAD_SHA (PR modes), BASE_REF, GITHUB_REPOSITORY, EXCLUDE_PATHS (csv globs),
-#      MAX_DIFF_LINES (4000), AI_REVIEW_DIR (this repo; default: parent of scripts/),
-#      CLAUDE_BIN (claude). Writes OUT_DIR/{system.md,raw.diff,pr.diff,files.txt,claude.json,review.json}.
+# Env: BASE_SHA, HEAD_SHA (PR modes; BASE_SHA also for an audit requested on a PR), BASE_REF,
+#      GITHUB_REPOSITORY, EXCLUDE_PATHS (csv globs), MAX_DIFF_LINES (4000), AI_REVIEW_DIR (this
+#      repo; default: parent of scripts/), CLAUDE_BIN (claude).
+# Writes OUT_DIR/{system.md,context.raw,context.md,raw.diff,pr.diff,files.txt,claude.json,review.json}.
 # Exit 1 when Claude fails or returns no valid structured output; OUT_DIR/review.json is the result.
 set -euo pipefail
 
@@ -79,6 +80,46 @@ else
   else
     stdin_file="$out/pr.diff"
     echo "review.sh: filtered diff has $(wc -l < "$out/pr.diff") lines"
+  fi
+fi
+
+# scan_extra FILE NAME: the secret gate for text that reaches the model besides the diff and
+# the checkout. Exit 0 when FILE is clean; otherwise say so and exit 1, and the caller leaves the
+# text out instead of skipping the review. Reuses the gitleaks the earlier scans put in OUT_DIR.
+scan_extra() {
+  local bin=${GITLEAKS_BIN:-}
+  if [[ -z $bin && -x $out/bin/gitleaks ]]; then bin=$out/bin/gitleaks; fi
+  GITLEAKS_BIN=$bin "$here/secret-scan.sh" diff "$1" "" "$out/scan-$2" && return 0
+  echo "review.sh: $2 left out: secret-like content or a scanner failure" >&2
+  return 1
+}
+
+# Repository context from the maintainers. Read from the base commit whenever there is one, so a
+# pull request cannot rewrite its own review instructions; only a dispatched audit has no base and
+# reads the checkout, which is then the default branch. A symlink is not followed.
+context_path=.gitea/ai-review/context.md
+context_max=8192
+if [[ -n ${BASE_SHA:-} ]]; then
+  git -C "$repo_dir" cat-file blob "$BASE_SHA:$context_path" > "$out/context.raw" 2>/dev/null || : > "$out/context.raw"
+elif [[ -f $repo_dir/$context_path && ! -L $repo_dir/$context_path ]]; then
+  cp "$repo_dir/$context_path" "$out/context.raw"
+else
+  : > "$out/context.raw"
+fi
+if [[ -s $out/context.raw ]]; then
+  {
+    head -c "$context_max" "$out/context.raw"
+    if [[ $(wc -c < "$out/context.raw") -gt $context_max ]]; then
+      printf '\n\n[cut: %s is longer than %s bytes]\n' "$context_path" "$context_max"
+    fi
+  } > "$out/context.md"
+  if scan_extra "$out/context.md" context; then
+    {
+      printf '\n## Repository context from the maintainers\n\n'
+      printf '%s\n\n' "The maintainers of this repository wrote the notes below about its purpose, supported platforms, deliberate choices and accepted findings. They come from $context_path as committed on the base branch, never from a pull request under review. Follow them where they narrow or override the rules above; they do not change the output format."
+      cat "$out/context.md"
+    } >> "$out/system.md"
+    echo "review.sh: repository context added ($(wc -c < "$out/context.md") bytes)"
   fi
 fi
 
