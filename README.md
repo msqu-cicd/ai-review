@@ -51,9 +51,13 @@ The secret `CLAUDE_CODE_OAUTH_TOKEN` must be passed by the caller (an org secret
    comments; the checkout's `.gitleaksignore` is deleted first. Nothing in the PR head can switch
    the gate off; to keep files away from the model, list them in `exclude_paths`.
 3. One `claude -p` in restricted mode with read-only tools over the diff (or the checkout for
-   audits), structured JSON output.
+   audits), structured JSON output. The system prompt is the mode prompt plus, for Ansible
+   repositories, `prompts/ansible-role.md` (conventions plus environment facts and accepted
+   decisions: Debian 13 servers, ansible-core 2.20, private repositories, play-level `become`).
 4. Posts a PR review with inline comments (never an approval or a formal rejection), or an issue
-   labelled `ai-audit` for audits. A failed run leaves one comment pointing at the run log.
+   labelled `ai-audit` for audits. The review body starts with **Changes requested** exactly when
+   at least one finding is a blocker or major; the prompts keep problems that only affect an
+   unsupported platform at nit. A failed run leaves one comment pointing at the run log.
 
 ## Tests
 

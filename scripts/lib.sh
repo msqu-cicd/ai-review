@@ -248,7 +248,8 @@ _jq_finding_ref='(.path + (if .line != null then ":" + (.line | tostring) else "
 
 # build_pr_review_payload REVIEW_JSON_FILE HEAD_SHA DIFF_FILE MODEL: Gitea
 # CreatePullReviewOptions with event COMMENT; findings on new-side diff lines become
-# inline comments, the rest are listed in the body.
+# inline comments, the rest are listed in the body. The "Changes requested" line follows the
+# severities, not the model's verdict: it shows exactly when a blocker or major finding exists.
 build_pr_review_payload() {
   local review=$1 sha=$2 diff=$3 model=$4 placeable
   placeable=$(diff_new_side_lines "$diff" | jq -R -s 'split("\n") | map(select(length > 0) | sub("\t"; ":"))')
@@ -261,7 +262,7 @@ build_pr_review_payload() {
         event: "COMMENT",
         commit_id: $sha,
         body: ("## AI review (" + $model + ")\n\n"
-               + (if $r.verdict == "request_changes" then "**Changes requested**\n\n" else "" end)
+               + (if any($r.findings[]; .severity | IN("blocker", "major")) then "**Changes requested**\n\n" else "" end)
                + $r.summary
                + (if ($rest | length) > 0
                   then "\n\n### Not placed in the diff\n"
