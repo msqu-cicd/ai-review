@@ -52,8 +52,10 @@ The secret `CLAUDE_CODE_OAUTH_TOKEN` must be passed by the caller (an org secret
    the gate off; to keep files away from the model, list them in `exclude_paths`.
 3. In PR modes, `scripts/history.sh` reads the earlier discussion on the PR with the job token
    into `out/history.md`: earlier AI reviews (body, inline comments and the replies under them)
-   and every other comment or review by a person, oldest first, quoted, about 32 KB at most
-   (older entries are dropped first). AI reviews are recognised by their author (`gitea-actions`,
+   and every other comment or review by a person, oldest first, about 32 KB at most (older
+   entries are dropped first). Bodies are quoted; paths, logins, times and commits are flattened
+   to one line (control characters and line separators become `?`) inside backticks, so no field
+   can start a line of its own. AI reviews are recognised by their author (`gitea-actions`,
    the job token's user) and heading; pending and dismissed reviews, bare `/review` commands and
    failure notices are left out. A failed fetch only means a review without history.
 4. One `claude -p` in restricted mode with read-only tools over the diff (or the checkout for

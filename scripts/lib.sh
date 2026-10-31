@@ -300,24 +300,31 @@ build_issue_payload() {
 # their inline comments and the issue comments. AI reviews are what BOT_LOGIN posted under the
 # "## AI review" heading (as a review or, after a fallback, as a comment); its other comments
 # (failure notices), bare /review commands, and pending or dismissed reviews are left out.
-# Replies under an inline comment stay with it. Texts are quoted, an entry is cut at MAX_BYTES/4
-# characters, and the oldest entries are dropped, with a one-line note, until the rest fits into
-# MAX_BYTES (the newest one always stays). Prints nothing when there is no discussion.
+# Replies under an inline comment stay with it. Bodies are quoted; every other API field (path,
+# login, time, commit) goes through `field`, so none can open a line of its own. An entry is cut
+# at MAX_BYTES/4 characters, and the oldest entries are dropped, with a one-line note, until the
+# rest fits into MAX_BYTES (the newest one always stays). Prints nothing when there is no
+# discussion.
 render_history() {
   jq -n -r --slurpfile reviews "$1" --slurpfile inline "$2" --slurpfile comments "$3" \
     --arg bot "$4" --argjson max "$5" '
     def quote: split("\r") | join("") | split("\n") | map("> " + .) | join("\n");
     def cut($n): if length > $n then .[:$n] + "\n[cut: longer than \($n) characters]" else . end;
+    # a non-body field on one line: control characters and line/paragraph separators become "?",
+    # backticks are dropped, the rest goes inside backticks
+    def field: tostring | explode
+      | map(if . < 32 or . == 127 or . == 8232 or . == 8233 then 63 elif . == 96 then empty else . end)
+      | implode | "`" + . + "`";
     def who: .user.login // "ghost";
     def by_ai: who == $bot and ((.body // "") | startswith("## AI review"));
-    def where: .path + (if (.position // 0) > 0 then ":" + (.position | tostring)
+    def where: (.path // "" | tostring) + (if (.position // 0) > 0 then ":" + (.position | tostring)
                         elif (.original_position // 0) > 0 then " (old line " + (.original_position | tostring) + ")"
                         else "" end);
     # one thread: the inline comments on the same line, oldest first
     def thread:
       (map(.resolver.login // empty) | first) as $resolver
-      | "On " + (.[0] | where) + (if $resolver then " (resolved by " + $resolver + ")" else "" end) + ":\n"
-        + (map((if who == $bot then "" else who + ", " + .created_at + ":\n" end) + ((.body // "") | quote))
+      | "On " + (.[0] | where | field) + (if $resolver then " (resolved by " + ($resolver | field) + ")" else "" end) + ":\n"
+        + (map((if who == $bot then "" else (who | field) + ", " + (.created_at | field) + ":\n" end) + ((.body // "") | quote))
            | join("\n"));
     ($inline[0] // []) as $inline
     | def threads($id):
@@ -330,26 +337,26 @@ render_history() {
         | threads(.id) as $threads
         | if by_ai then
             {t: .submitted_at,
-             text: ("### Earlier AI review of commit " + ((.commit_id // "")[:7]) + ", " + .submitted_at
+             text: ("### Earlier AI review of commit " + ((.commit_id // "") | tostring | .[:7] | field) + ", " + (.submitted_at | field)
                     + "\n\n" + ($body | quote)
                     + (if $threads != "" then "\n\nInline comments:\n\n" + $threads else "" end))}
           elif who == $bot or ($body == "" and $threads == "") then empty
           else
             {t: .submitted_at,
-             text: ("### Review by " + who
+             text: ("### Review by " + (who | field)
                     + (if .state == "APPROVED" then " (approved)"
                        elif .state == "REQUEST_CHANGES" then " (changes requested)" else "" end)
-                    + ", " + .submitted_at
+                    + ", " + (.submitted_at | field)
                     + (if $body != "" then "\n\n" + ($body | quote) else "" end)
                     + (if $threads != "" then "\n\n" + $threads else "" end))}
           end ]
       + [ ($comments[0] // [])[]
           | (.body // "") as $body
           | if by_ai then
-              {t: .created_at, text: ("### Earlier AI review, posted as a comment, " + .created_at + "\n\n" + ($body | quote))}
+              {t: .created_at, text: ("### Earlier AI review, posted as a comment, " + (.created_at | field) + "\n\n" + ($body | quote))}
             elif who == $bot or $body == "" or ($body | test("\\A\\s*/review( +(opus|sonnet|audit))*\\s*\\z")) then empty
             else
-              {t: .created_at, text: ("### Comment by " + who + ", " + .created_at + "\n\n" + ($body | quote))}
+              {t: .created_at, text: ("### Comment by " + (who | field) + ", " + (.created_at | field) + "\n\n" + ($body | quote))}
             end ]
     | sort_by(.t) | map(.text | cut($max / 4 | floor)) as $all
     | (reduce ($all | reverse | .[]) as $e ({kept: [], bytes: 0, full: false};
