@@ -34,6 +34,9 @@ on:
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
+      # Read access to Infrastructure/infra for the infra usage digest (Ansible roles only)
+      INFRA_READ_TOKEN:
+        required: false
 
 jobs:
   review:
@@ -93,6 +96,43 @@ jobs:
         env:
           PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
         run: ai-review/scripts/history.sh "$PR_NUMBER" out/history.md || echo "history.sh failed, reviewing without history"
+
+      # How the owner's infrastructure uses the role: names, file locations and value types only
+      # (scripts/infra-digest.py). The infra repository holds plaintext secrets, so its checkout lives
+      # in a temporary directory outside the workspace and is deleted when this step ends, before the
+      # model runs; the token goes to git through the environment, never the command line. Without
+      # the token, for repositories that are not roles, or on any error the review runs without it.
+      - name: Infra usage digest
+        if: steps.gate.outputs.run == 'true'
+        env:
+          INFRA_READ_TOKEN: ${{ secrets.INFRA_READ_TOKEN }}
+          BASE_SHA: ${{ steps.gate.outputs.base_sha }}
+        run: |
+          [[ -f repo/meta/main.yml ]] || { echo "not an Ansible role, no infra digest"; exit 0; }
+          [[ -n ${INFRA_READ_TOKEN:-} ]] || { echo "no INFRA_READ_TOKEN, reviewing without the infra digest"; exit 0; }
+          tmp=$(mktemp -d)
+          trap 'git -C repo worktree remove --force "$tmp/role-base" 2> /dev/null; rm -rf "$tmp"' EXIT
+          if (
+            set -euo pipefail
+            export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader GIT_CONFIG_VALUE_0="Authorization: token $INFRA_READ_TOKEN"
+            git clone -q --depth 1 --filter=blob:none --sparse https://git.msqu.de/infrastructure/infra.git "$tmp/infra"
+            git -C "$tmp/infra" sparse-checkout set --no-cone '/group_vars/' '/host_vars/' '/inventories/' '/*.yml'
+            python3 -m venv "$tmp/venv"
+            "$tmp/venv/bin/pip" install -q -r ai-review/scripts/requirements-digest.txt
+            # The role as of the base commit for pull requests: the change must not choose which
+            # infra variables the digest lists (audits read the default branch, already trusted).
+            role=repo
+            if [[ -n ${BASE_SHA:-} ]]; then
+              git -C repo worktree add -q --detach "$tmp/role-base" "$BASE_SHA"
+              role=$tmp/role-base
+            fi
+            "$tmp/venv/bin/python" ai-review/scripts/infra-digest.py "$role" "$tmp/infra" "${GITHUB_REPOSITORY#*/}" > out/infra.md
+          ); then
+            echo "infra digest: $(wc -c < out/infra.md) bytes"
+          else
+            echo "infra digest failed, reviewing without it"
+            rm -f out/infra.md
+          fi
 
       - name: Review
         if: steps.gate.outputs.run == 'true'
