@@ -3,6 +3,9 @@
 
 usage: infra-digest.py ROLE_DIR INFRA_DIR [ROLE_NAME] > infra.md
 
+ROLE_DIR must be trusted: the review workflow passes the base commit for pull requests, so a change
+cannot pick which infra variables the digest lists.
+
 Names, file locations and value types only, never values: the infrastructure repository holds
 plaintext secrets. Sections:
 - which infra playbooks apply the role, under which when: clauses, on which inventories;
@@ -24,6 +27,8 @@ MAX_BYTES = 12000
 # workstations.yml, github.yml on localhost.yml.
 SERVER_EXCLUDE = {"workstations.yml", "localhost.yml"}
 VAR_NAME = re.compile(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b")
+# Literals inside when: expressions are values; the structure and the variable names stay
+QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
 
 
 class TagLoader(yaml.SafeLoader):
@@ -241,7 +246,7 @@ def main():
     lines.append("### Where infra applies the role")
     if apps:
         for playbook, clauses in apps:
-            cond = " and ".join(str(c) for c in clauses) or "always"
+            cond = " and ".join(QUOTED.sub("'…'", str(c)) for c in clauses) or "always"
             lines.append(f"- `{playbook}` when `{cond}`, inventories: {', '.join(inventories_for(infra_dir, playbook)) or 'none'}")
             for clause in clauses:
                 for gate in sorted(set(VAR_NAME.findall(str(clause))) & set(settings)):

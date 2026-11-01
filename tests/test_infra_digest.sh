@@ -59,6 +59,17 @@ test_infra_digest_reports_unknown_prefixed_names() {
   assert_contains "$out" '`docker_old_name`: group_vars/all/docker.yml: str'
 }
 
+test_infra_digest_masks_literals_in_when() {
+  local d py out
+  d=$(mktemp -d)
+  digest_fixture "$d"
+  printf -- '- name: Site\n  hosts: all\n  roles:\n    - role: docker\n      when: inventory_hostname != "literal-host-42"\n' > "$d/infra/site.yml"
+  py=$(digest_python)
+  out=$("$py" scripts/infra-digest.py "$d/role" "$d/infra")
+  assert_contains "$out" "when \`inventory_hostname != '…'\`"
+  [[ $out != *literal-host-42* ]] || { echo "digest leaked a literal from when" >&2; return 1; }
+}
+
 test_infra_digest_role_not_applied() {
   local d py out
   d=$(mktemp -d)
