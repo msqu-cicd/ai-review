@@ -171,7 +171,8 @@ rm -f "$out/cost.json"
 ) || rc=$?
 
 if [[ -s $out/claude.json ]]; then
-  jq '{models: ((.modelUsage // {}) | keys), turns: .num_turns, duration_ms, is_error,
+  # cost_usd: Claude Code's estimate at API list prices, not what the subscription charges
+  jq '{models: ((.modelUsage // {}) | keys), turns: .num_turns, duration_ms, is_error, cost_usd: .total_cost_usd,
        usage: ((.usage // {}) | {input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens})}' \
     "$out/claude.json" 2>/dev/null || echo "review.sh: claude.json is not JSON" >&2
 fi
