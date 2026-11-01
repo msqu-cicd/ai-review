@@ -21,6 +21,15 @@ assert_json_eq() {
   assert_eq "$expected" "$actual" "${3:-}"
 }
 
+# assert_contains HAYSTACK NEEDLE: HAYSTACK must contain NEEDLE literally.
+assert_contains() {
+  if [[ "$1" == *"$2"* ]]; then
+    return 0
+  fi
+  printf 'assert_contains failed\n  missing: %s\n  in:\n%s\n' "$2" "$1" >&2
+  return 1
+}
+
 # assert_exit CODE CMD [ARGS...]: the command must exit with CODE. Output is discarded.
 assert_exit() {
   local code=$1 rc=0

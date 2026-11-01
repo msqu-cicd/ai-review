@@ -1,0 +1,2 @@
+# For scripts/infra-digest.py, installed into a throwaway venv by the review workflow and the tests
+PyYAML==6.0.3

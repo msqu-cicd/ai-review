@@ -81,6 +81,20 @@ The secret `CLAUDE_CODE_OAUTH_TOKEN` must be passed by the caller (an org secret
    Each of these posts ends with the run's cost estimate as a hidden line, see
    [Cost estimate](#cost-estimate).
 
+### Infra usage digest (Ansible roles)
+
+With the optional secret `INFRA_READ_TOKEN` (read access to Infrastructure/infra; the role callers pass
+`CI_RUNNER_PAT`), a step before the review generates `scripts/infra-digest.py`'s digest of how the
+owner's infrastructure uses the role: the playbooks that apply it with their `when:` and inventories, the
+role variables infra sets (file, host or group, value type), variables with the role's prefix that the role
+does not define (old names after a rename), and shared variables the role reads. Names, locations and types
+only, never values: the infra repository holds plaintext secrets, so its sparse checkout lives in a
+temporary directory outside the workspace and is deleted before the model runs, and the token reaches git
+through the environment, not the command line. The digest passes the same gitleaks gate as the context
+file and is appended to the system prompt with instructions to judge renames, defaults, specs and asserts
+against it. PyYAML comes from `scripts/requirements-digest.txt` in a throwaway venv. Without the token,
+for repositories without `meta/main.yml`, or on any error the review runs without it.
+
 ### Repository context
 
 A repository can tell the reviewer what it cannot see in the code in

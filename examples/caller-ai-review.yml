@@ -44,3 +44,5 @@ jobs:
       model: ${{ inputs.model || '' }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # Optional: read access to Infrastructure/infra for the infra usage digest (Ansible roles)
+      INFRA_READ_TOKEN: ${{ secrets.CI_RUNNER_PAT }}
