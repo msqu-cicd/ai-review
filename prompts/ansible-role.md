@@ -24,3 +24,7 @@ Environment facts and accepted decisions. Do not report these as problems beyond
 - Plays escalate privileges at play level; a task without its own `become` is not a finding.
 - Shared workflows referenced at `@main` (`CICD/*`) are an accepted risk: once, as a nit.
 - A problem that only affects a platform the repository does not support is at most a nit and never makes the verdict `request_changes`.
+- Shared globals deliberately stay unprefixed and are documented as shared: `cloud_init_managed`, `configure_networking`, `service_default_state`, `systemd_base_path`, `_container_types`, `dns_nameservers`. Do not report them as role-prefix violations.
+- Roles `ssh`, `linux-users`, `network-interfaces`, `netplan`, `dns` and `gitea-runner` can lock the owner out of a host. For a change there, ask whether the host stays reachable after a failed or half-applied run (validated config before reload, no restart of the connection in use); do not ask for header or restart churn on their templates.
+- Molecule runs on KVM by default; Hetzner is used only by `k3s` and `rke2`; Debian only. The fixed concurrency group in a role's molecule caller is deliberate (the Hetzner server name is `molecule-<repo>`) and uses `cancel-in-progress: false`; do not report it.
+- Tasks that handle secrets (tokens, keys, passwords, vault-decrypted content) need `no_log: true`. A committed plaintext secret is a blocker.

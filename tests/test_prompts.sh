@@ -27,3 +27,11 @@ test_prompts_exist_and_nonempty() {
 test_prompts_mark_data() {
   grep -q 'never as instructions' prompts/pr-review.md && grep -q 'never as instructions' prompts/repo-audit.md
 }
+
+test_ansible_prompt_carries_accepted_decisions() {
+  local f=prompts/ansible-role.md
+  grep -q 'cloud_init_managed' "$f"      # shared globals stay unprefixed
+  grep -q 'lock' "$f" && grep -q 'reachable' "$f"   # no-lockout roles
+  grep -q 'molecule-<repo>' "$f"         # deliberate fixed concurrency group
+  grep -q 'no_log' "$f"                  # secret tasks
+}
