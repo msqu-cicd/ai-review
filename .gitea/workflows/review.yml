@@ -46,7 +46,7 @@ jobs:
       issues: write
       pull-requests: write
     env:
-      CLAUDE_CODE_VERSION: 2.1.308 # renovate: datasource=custom.claude-code depName=claude-code
+      CLAUDE_CODE_VERSION: 2.1.309 # renovate: datasource=custom.claude-code depName=claude-code
       GITEA_TOKEN: ${{ secrets.GITEA_TOKEN || github.token }}
       GITHUB_API_URL: ${{ github.api_url }}
       GITHUB_REPOSITORY: ${{ github.repository }}
