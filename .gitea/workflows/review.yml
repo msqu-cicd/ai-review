@@ -52,7 +52,7 @@ jobs:
       GITHUB_REPOSITORY: ${{ github.repository }}
     steps:
       - name: Check out CICD/ai-review
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: CICD/ai-review
           ref: ${{ inputs.ai_review_ref }}
@@ -71,7 +71,7 @@ jobs:
 
       - name: Check out the repository
         if: steps.gate.outputs.run == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: repo
           ref: ${{ steps.gate.outputs.head_sha }}
