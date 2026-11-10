@@ -47,7 +47,8 @@ The secret `CLAUDE_CODE_OAUTH_TOKEN` must be passed by the caller (an org secret
    gitleaks over the tree. Any hit ends the run with a short PR comment and no model call.
    In PR mode `review.sh` also scans the filtered diff it would send (deleted files and removed
    lines are not in the tree), with the same outcome on a hit.
-   gitleaks always uses `scripts/gitleaks.toml` (its built-in rules) and ignores `gitleaks:allow`
+   gitleaks always uses `scripts/gitleaks.toml` (its built-in rules, plus one allowlist for
+   Zabbix item keys such as `key: sma.emeter.l1_voltage`) and ignores `gitleaks:allow`
    comments; the checkout's `.gitleaksignore` is deleted first. Nothing in the PR head can switch
    the gate off; to keep files away from the model, list them in `exclude_paths`.
 3. In PR modes, `scripts/history.sh` reads the earlier discussion on the PR with the job token

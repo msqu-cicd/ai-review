@@ -1,4 +1,15 @@
-# Config for secret-scan.sh, always passed with --config: gitleaks' built-in rules and nothing
-# else. Without it gitleaks reads a .gitleaks.toml from the scanned checkout, i.e. the PR head.
+# Config for secret-scan.sh, always passed with --config: gitleaks' built-in rules and the one
+# allowlist below. Without it gitleaks reads a .gitleaks.toml from the scanned checkout, i.e. the PR head.
+# Tests: tests/test_secret_scan.sh (GITLEAKS_TEST=1).
 [extend]
 useDefault = true
+
+# Zabbix template item keys (`key: sma.emeter.l1_voltage`) match generic-api-key, which kept every
+# Infrastructure/zabbix review behind the gate. Allowed: a match that is exactly `key:` and a
+# lowercase dotted name. "match", not "line": `gitleaks stdin` (diff mode) reports no line.
+# Other rules, other key names (api_key) and values with capitals or a digit up front still hit.
+[[allowlists]]
+description = "Zabbix item keys"
+targetRules = ["generic-api-key"]
+regexTarget = "match"
+regexes = ['''^key: '?[a-z]+(\.[a-z][a-z0-9_]*)+'?\s*$''']
