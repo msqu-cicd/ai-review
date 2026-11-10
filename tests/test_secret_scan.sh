@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests for scripts/secret-scan.sh. The two tests that need the gitleaks binary run only
+# Tests for scripts/secret-scan.sh. The tests that need the gitleaks binary run only
 # with GITLEAKS_TEST=1 (they download it once into the out dir).
 
 test_rejects_parent_traversal() {
@@ -88,6 +88,56 @@ test_gitleaks_allow_comment_does_not_hide_a_leak_in_the_tree() {
   d=$(leaky_tree)
   sed -i 's/$/ # gitleaks:allow/' "$d/group_vars/all/tokens.yml"
   assert_exit 1 scripts/secret-scan.sh tree "$d" '' "$(mktemp -d)"
+}
+
+# Zabbix item keys look like generic API keys; gitleaks.toml allows exactly these.
+zabbix_item_keys='          key: sma.emeter.l1_voltage
+          key: sma.emeter.l2_voltage
+          key: sma.emeter.l3_voltage'
+# Made-up values that generic-api-key reports: the allowlist must not swallow them.
+fake_keys='  key: Zq8vN3kLp7RtX2wB9mYc4HdF
+  api_key: zq8vn3klp7rtx2wb9myc4hdf6s'
+
+# as_diff LINES: a diff that adds LINES
+as_diff() {
+  printf 'diff --git a/t.yaml b/t.yaml\n--- a/t.yaml\n+++ b/t.yaml\n@@ -0,0 +1,3 @@\n'
+  sed 's/^/+/' <<< "$1"
+}
+
+test_zabbix_item_keys_pass_in_the_tree() {
+  [[ -n "${GITLEAKS_TEST:-}" ]] || return 0
+  local d
+  d=$(mktemp -d)
+  printf '%s\n' "$zabbix_item_keys" > "$d/template.yaml"
+  assert_exit 0 scripts/secret-scan.sh tree "$d" '' "$(mktemp -d)"
+}
+
+test_zabbix_item_keys_pass_in_the_diff() { # stdin mode reports no line: the allowlist targets the match
+  [[ -n "${GITLEAKS_TEST:-}" ]] || return 0
+  local diff
+  diff=$(mktemp)
+  as_diff "$zabbix_item_keys" > "$diff"
+  assert_exit 0 scripts/secret-scan.sh diff "$diff" '' "$(mktemp -d)"
+}
+
+test_other_keys_still_hit_in_the_tree() {
+  [[ -n "${GITLEAKS_TEST:-}" ]] || return 0
+  local d out
+  d=$(mktemp -d)
+  out=$(mktemp -d)
+  printf '%s\n' "$fake_keys" > "$d/x.yml"
+  assert_exit 1 scripts/secret-scan.sh tree "$d" '' "$out"
+  assert_eq 2 "$(jq length "$out/gitleaks.json")"
+}
+
+test_other_keys_still_hit_in_the_diff() {
+  [[ -n "${GITLEAKS_TEST:-}" ]] || return 0
+  local diff out
+  diff=$(mktemp)
+  out=$(mktemp -d)
+  as_diff "$fake_keys" > "$diff"
+  assert_exit 1 scripts/secret-scan.sh diff "$diff" '' "$out"
+  assert_eq 2 "$(jq length "$out/gitleaks.json")"
 }
 
 test_gitleaks_allow_comment_does_not_hide_a_leak_in_the_diff() {
