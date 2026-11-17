@@ -101,6 +101,7 @@ fake_keys='  key: Zq8vN3kLp7RtX2wB9mYc4HdF
 # as_diff LINES: a diff that adds LINES
 as_diff() {
   printf 'diff --git a/t.yaml b/t.yaml\n--- a/t.yaml\n+++ b/t.yaml\n@@ -0,0 +1,3 @@\n'
+  # shellcheck disable=SC2001 # prefixes every line, which ${var//} cannot anchor
   sed 's/^/+/' <<< "$1"
 }
 

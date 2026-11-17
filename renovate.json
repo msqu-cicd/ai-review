@@ -15,6 +15,7 @@
       "description": "Version pins followed by a '# renovate: datasource=... depName=...' marker on the same line",
       "managerFilePatterns": [
         "/^\\.gitea/workflows/review\\.yml$/",
+        "/^\\.gitea/workflows/test\\.yml$/",
         "/^scripts/secret-scan\\.sh$/"
       ],
       "matchStrings": [
