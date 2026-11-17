@@ -162,9 +162,12 @@ tests/run.sh
 
 Needs bash and jq. `GITLEAKS_TEST=1 tests/run.sh` also runs the tests that download gitleaks.
 
-CI (`.gitea/workflows/test.yml`) also runs `shellcheck` 0.11.0 (pinned, checksum-verified) over every
-tracked `*.sh`; `.shellcheckrc` resolves `# shellcheck source=` paths. Locally:
-`git ls-files -z '*.sh' | xargs -0 shellcheck`.
+CI (`.gitea/workflows/test.yml`, job `lint`) also runs `shellcheck` 0.11.0 (pinned, checksum-verified) over
+every tracked `*.sh` (`.shellcheckrc` resolves `# shellcheck source=` paths) and actionlint 1.7.12 over the
+workflows and the caller template, which shellchecks their `run:` blocks too. `.gitea/actionlint.yaml` ignores
+`secrets.GITEA_TOKEN`, which Gitea provides and actionlint does not know. Locally:
+`git ls-files -z '*.sh' | xargs -0 shellcheck` and
+`actionlint -config-file .gitea/actionlint.yaml .gitea/workflows/*.yml examples/caller-ai-review.yml`.
 
 ## Token lifecycle
 

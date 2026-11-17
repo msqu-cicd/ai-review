@@ -14,10 +14,11 @@ jobs:
       - run: jq --version
       - run: tests/run.sh
 
-  shellcheck:
+  lint:
     runs-on: ubuntu-latest
     env:
       SHELLCHECK_VERSION: 0.11.0 # renovate: datasource=github-releases depName=koalaman/shellcheck
+      ACTIONLINT_VERSION: 1.7.12 # renovate: datasource=github-releases depName=rhysd/actionlint
       # sha256 of shellcheck-<version>.linux.x86_64.tar.gz (GitHub release asset digest); a version
       # bump needs the new value, the job fails until it is set
       SHELLCHECK_SHA256: b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6
@@ -35,3 +36,18 @@ jobs:
         run: |
           shellcheck --version
           git ls-files -z '*.sh' | xargs -0 shellcheck
+      - name: Install actionlint
+        run: |
+          set -o pipefail
+          base="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          dir="$RUNNER_TEMP/actionlint"
+          mkdir -p "$dir"
+          curl -fsSL --retry 2 -o "$dir/$tarball" "$base/$tarball"
+          curl -fsSL --retry 2 "$base/actionlint_${ACTIONLINT_VERSION}_checksums.txt" | grep "  ${tarball}\$" > "$dir/sum"
+          (cd "$dir" && sha256sum -c sum)
+          tar -xzf "$dir/$tarball" -C "$dir" actionlint
+          echo "$dir" >> "$GITHUB_PATH"
+      # shellchecks the run: blocks with the shellcheck installed above
+      - name: actionlint
+        run: actionlint -config-file .gitea/actionlint.yaml .gitea/workflows/*.yml examples/caller-ai-review.yml

@@ -1,0 +1,8 @@
+---
+# actionlint configuration for Gitea Actions; CI (test.yml) runs
+#   actionlint -config-file .gitea/actionlint.yaml .gitea/workflows/*.yml examples/caller-ai-review.yml
+paths:
+  "**/*.yml":
+    ignore:
+      # Gitea provides secrets.GITEA_TOKEN to every workflow; actionlint only knows GITHUB_TOKEN
+      - 'property "gitea_token" is not defined in object type'
