@@ -30,6 +30,7 @@ done
 
 mapfile -t repos < <(sed -e 's/[[:space:]]*#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "$list" | grep -v '^$')
 
+# shellcheck disable=SC2016 # the backticks are Markdown, not command substitution
 pr_body='Adds the caller for the shared AI review workflow (https://git.msqu.de/CICD/ai-review): Claude Code reviews pull requests when they are opened or reopened and on a `/review` comment, and audits the whole repository on workflow_dispatch. The org secret CLAUDE_CODE_OAUTH_TOKEN is already in place.'
 
 for repo in "${repos[@]}"; do

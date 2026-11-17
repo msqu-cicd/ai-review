@@ -1,0 +1,2 @@
+# Resolve "# shellcheck source=" paths relative to the script (lib.sh) as well as the repo root
+source-path=SCRIPTDIR

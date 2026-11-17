@@ -162,6 +162,10 @@ tests/run.sh
 
 Needs bash and jq. `GITLEAKS_TEST=1 tests/run.sh` also runs the tests that download gitleaks.
 
+CI (`.gitea/workflows/test.yml`) also runs `shellcheck` 0.11.0 (pinned, checksum-verified) over every
+tracked `*.sh`; `.shellcheckrc` resolves `# shellcheck source=` paths. Locally:
+`git ls-files -z '*.sh' | xargs -0 shellcheck`.
+
 ## Token lifecycle
 
 The workflow authenticates with a long-lived Claude Code OAuth token, created by the subscription
